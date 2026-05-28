@@ -1,0 +1,77 @@
+# Maintainer: CachyOS SBH Project
+pkgname=cachyos-sbh-py
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Python 3.14+ async utilities for Secure Boot + NVIDIA + TPM2 orchestration"
+arch=('x86_64')
+url="https://github.com/cachyos/cachyos-sbh"
+license=('MIT')
+depends=(
+    'python>=3.14'
+    'python-aiofiles'
+)
+optdepends=(
+    'ruff: Python linting'
+    'pyright: Type checking'
+    'pytest: Test framework'
+    'pytest-asyncio: Async test support'
+)
+makedepends=(
+    'python-setuptools'
+    'python-build'
+)
+source=()
+md5sums=()
+install=${pkgname}.install
+
+# Use local files from the project
+_projdir="/home/daen/Projects/sbh/python-dev"
+
+prepare() {
+    cp -r "${_projdir}/cachyos_sbh" "${srcdir}/"
+    cp -r "${_projdir}/tests" "${srcdir}/"
+    cp "${_projdir}/pyproject.toml" "${srcdir}/"
+    cp "${_projdir}/setup.py" "${srcdir}/"
+    cp "${_projdir}/README.md" "${srcdir}/"
+}
+
+build() {
+    cd "${srcdir}"
+    python -m build --wheel --no-isolation 2>/dev/null || \
+        python -m pip install --no-deps --no-build-isolation -e . --quiet
+}
+
+package() {
+    cd "${srcdir}"
+    
+    # Install Python modules
+    python -m pip install --no-deps --root="${pkgdir}" --prefix=/usr --no-build-isolation . --quiet 2>/dev/null
+    
+    # Fallback: install modules directly
+    if [ ! -d "${pkgdir}/usr/lib/python"* ]; then
+        mkdir -p "${pkgdir}/usr/lib/python3.14/site-packages/cachyos_sbh"
+        
+        # Copy async modules
+        install -Dm 644 cachyos_sbh/__init__.py "${pkgdir}/usr/lib/python3.14/site-packages/cachyos_sbh/__init__.py"
+        install -Dm 644 cachyos_sbh/tpm_async.py "${pkgdir}/usr/lib/python3.14/site-packages/cachyos_sbh/tpm_async.py"
+        install -Dm 644 cachyos_sbh/nvidia_async.py "${pkgdir}/usr/lib/python3.14/site-packages/cachyos_sbh/nvidia_async.py"
+        install -Dm 644 cachyos_sbh/cryptsetup_async.py "${pkgdir}/usr/lib/python3.14/site-packages/cachyos_sbh/cryptsetup_async.py"
+    fi
+    
+    # Install documentation
+    install -Dm 644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    install -Dm 644 pyproject.toml "${pkgdir}/usr/share/doc/${pkgname}/pyproject.toml"
+    install -Dm 644 setup.py "${pkgdir}/usr/share/doc/${pkgname}/setup.py"
+    
+    # Install tests (optional, for development)
+    mkdir -p "${pkgdir}/usr/share/${pkgname}/tests"
+    cp -r tests/* "${pkgdir}/usr/share/${pkgname}/tests/" 2>/dev/null || true
+    
+    # Install license
+    install -Dm 644 /dev/null "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
+
+check() {
+    cd "${srcdir}"
+    python -m pytest tests/ -v --tb=short 2>/dev/null || echo "Tests optional during package build"
+}

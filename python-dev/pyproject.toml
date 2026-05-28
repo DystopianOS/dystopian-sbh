@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cachyos-sbh"
+version = "1.0.0"
+description = "CachyOS Secure Boot + NVIDIA + TPM2 Python utilities"
+authors = [{name = "CachyOS SBH Project"}]
+requires-python = ">=3.14"
+dependencies = ["aiofiles>=25.1.0"]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.15.0",
+    "pyright>=1.1.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = [".venv", "venv", "__pycache__", ".pytest_cache", ".git"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "ASYNC", "RUF",
+]
+ignore = ["E501", "E203"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F841"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+pythonPlatform = "Linux"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "warning"
+reportImportCycles = "warning"
+reportPrivateImportUsage = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportConstantRedefinition = "error"
+reportInvalidStringEscapeSequence = "error"
+reportUnusedImport = "error"
+reportUnusedVariable = "error"
+reportUnusedFunction = "warning"
+reportMissingImports = "warning"
+reportMissingModuleSource = "warning"
+reportIncompatibleVariableOverride = "warning"
+exclude = [".venv", "__pycache__", ".pytest_cache"]
+include = ["src", "tests"]
+reportOptionalMemberAccess = "warning"
+reportOptionalOperand = "warning"
+reportOptionalSubscript = "warning"
+
+[tool.pytest]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--strict-markers"]

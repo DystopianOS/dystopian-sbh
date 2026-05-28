@@ -1,0 +1,359 @@
+# Minimal localized kernel config for i5-8600K + GTX 1050 Ti + THIS HOST ONLY
+# -march=native, stripped drivers, custom chipset
+# NOT PORTABLE - specific to this machine's hardware
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CPU: COFFEE LAKE (i5-8600K) - NATIVE MARCH ONLY
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_X86_64=y
+CONFIG_X86=y
+
+# Use native march (not x86-64-v2) - Coffee Lake specific
+# Compiler will use: -march=native (skylake uarch)
+# Enables: RDRAND, RDSEED, RTM, ADX (beyond x86-64-v2)
+
+CONFIG_MARCH_NATIVE=y
+
+# Disable all other CPU types (we KNOW it's Coffee Lake)
+CONFIG_M386=n
+CONFIG_M486=n
+CONFIG_M586=n
+CONFIG_M686=n
+CONFIG_MPENTIUM4=n
+CONFIG_MK6=n
+CONFIG_MCRUSOE=n
+CONFIG_MELAN=n
+CONFIG_MGEODEGX1=n
+CONFIG_MGEODE_LX=n
+CONFIG_MCYRIXIII=n
+CONFIG_MVIAC3_2=n
+CONFIG_MVIAC7=n
+CONFIG_MPSC=n
+CONFIG_MK7=n
+CONFIG_MK8=n
+CONFIG_MCORES=n
+CONFIG_GENERIC_CPU=n
+CONFIG_GENERIC_CPU_FALLBACK=n
+CONFIG_MATOM=n
+CONFIG_MCORE2=n
+CONFIG_NEHALEM=n
+CONFIG_WESTMERE=n
+CONFIG_SANDYBRIDGE=n
+CONFIG_IVYBRIDGE=n
+CONFIG_HASWELL=n
+CONFIG_BROADWELL=n
+CONFIG_SKYLAKE=n
+CONFIG_KABYLAKE=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COMPILER + LTO (minimal scope for native march)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_LTO_CLANG_THIN=y
+CONFIG_LTO_CLANG=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SCHEDULER (BORE for desktop latency)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_SCHED_BORE=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MEMORY (THP, swappiness tuning disabled in kernel - via sysctl)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_TRANSPARENT_HUGEPAGE=y
+CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHIPSET: Z370 (8th gen Coffee Lake) - SPECIFIC TO THIS BOARD
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Disable ALL other chipsets - we know we have Z370
+CONFIG_X86_INTEL_LPSS=n
+CONFIG_PINCTRL_INTEL=n
+CONFIG_INTEL_IOMMU=n
+
+# Only Z370 LPC controller (not all LSIO variants)
+CONFIG_LPC_ICH=y
+CONFIG_LPC_SCH=n
+
+# Only Intel AHCI for Z370 storage
+CONFIG_AHCI_MVEBU=n
+CONFIG_AHCI_XGENE=n
+CONFIG_AHCI_QORIQ=n
+CONFIG_AHCI_TEGRA=n
+CONFIG_AHCI_DWC=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STORAGE: ONLY what THIS machine has (likely NVMe + SATA)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# NVMe (Intel Optane or WD Black - most common for i5-8600K)
+CONFIG_NVME=y
+CONFIG_NVME_CORE=y
+CONFIG_BLK_DEV_NVME=y
+CONFIG_NVME_MULTIPATH=y
+CONFIG_NVME_HWMON=y
+
+# SATA (if secondary drive)
+CONFIG_SATA_SUPPORT=y
+CONFIG_ATA=y
+CONFIG_SATA=y
+CONFIG_SATA_AHCI=y
+CONFIG_SATA_AHCI_PLATFORM=y
+
+# Disable all other storage (USB/MMC/Floppy)
+CONFIG_ATA_SFF=n
+CONFIG_ATA_BMDMA=n
+CONFIG_SATA_SVW=n
+CONFIG_SATA_MV=n
+CONFIG_SATA_NV=n
+CONFIG_SATA_PROMISE=n
+CONFIG_SATA_QStor=n
+CONFIG_SATA_SX4=n
+CONFIG_SATA_VIA=n
+CONFIG_SATA_VITESSE=n
+CONFIG_SATA_ACARD_AHCI=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NETWORK: ONLY your NIC (likely Intel Gigabit)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Intel i219-V (common on Z370 boards)
+CONFIG_E1000E=y
+CONFIG_IGB=n
+
+# Disable other NICs
+CONFIG_FORCEDETH=n
+CONFIG_R8169=n
+CONFIG_SKY2=n
+CONFIG_VIA_RHINE=n
+CONFIG_SUNGEM=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FIRMWARE: MINIMAL (only GPU + NVMe microcode)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Intel microcode (6th-9th gen, Coffee Lake = 8th gen)
+CONFIG_MICROCODE=y
+CONFIG_MICROCODE_INTEL=y
+CONFIG_MICROCODE_INTEL_EARLY=y
+
+# GPU firmware (NVIDIA GTX 1050 Ti)
+CONFIG_EXTRA_FIRMWARE="nvidia/gp104/nvdec.bin,nvidia/gp104/fecs.bin,nvidia/gp104/gpccs.bin"
+CONFIG_EXTRA_FIRMWARE_DIR="firmware"
+
+# Disable all other firmware
+CONFIG_FW_LOADER_USER_HELPER=n
+CONFIG_FW_CACHE=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GRAPHICS: ONLY NVIDIA GTX 1050 Ti (Pascal SM 6.1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# DRM (Direct Rendering Manager)
+CONFIG_DRM=y
+CONFIG_DRM_NVIDIA=y
+CONFIG_DRM_KMS_HELPER=y
+CONFIG_DRM_TTM=y
+
+# Disable all other GPUs
+CONFIG_DRM_AMDGPU=n
+CONFIG_DRM_RADEON=n
+CONFIG_DRM_NOUVEAU=n
+CONFIG_DRM_INTEL=n
+CONFIG_DRM_XGI=n
+CONFIG_DRM_VIA=n
+CONFIG_DRM_SAVAGE=n
+CONFIG_DRM_3DLabs=n
+CONFIG_DRM_TDFX=n
+CONFIG_DRM_SIS=n
+CONFIG_DRM_KYRO=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INPUT: MINIMAL (no exotic controllers)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_HID=y
+CONFIG_HID_GENERIC=y
+CONFIG_USB_HID=y
+
+# Disable gaming controllers, tablets, etc.
+CONFIG_HID_WIIMOTE=n
+CONFIG_HID_PLAYSTATION=n
+CONFIG_HID_XBOX=n
+CONFIG_HID_PICOLCD=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USB: ONLY what's needed (likely front panel USB 3.0)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_USB=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_XHCI_PCI=y
+
+# Disable other USB hosts
+CONFIG_USB_EHCI_HCD=n
+CONFIG_USB_OHCI_HCD=n
+CONFIG_USB_UHCI_HCD=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUDIO: MINIMAL (likely Realtek ALC892/897 on Z370)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_HDA=y
+CONFIG_SND_HDA_INTEL=y
+CONFIG_SND_HDA_CODEC_REALTEK=y
+
+# Disable other codecs
+CONFIG_SND_HDA_CODEC_ANALOG=n
+CONFIG_SND_HDA_CODEC_SIGMATEL=n
+CONFIG_SND_HDA_CODEC_VIA=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECURITY (from hardened Secure Boot chain)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_LOCKDOWN_LSM=y
+CONFIG_LOCKDOWN_LSM_EARLY=y
+CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS=y
+CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+CONFIG_STRICT_KERNEL_RWX=y
+CONFIG_STRICT_MODULE_RWX=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# IMA + EVM (Integrity Measurement Architecture)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_IMA=y
+CONFIG_IMA_ENFORCE=y
+CONFIG_IMA_LOAD_X509=y
+CONFIG_EVM=y
+CONFIG_EVM_ATTR_FSUUID=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUDIT (Security event logging)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_AUDIT=y
+CONFIG_AUDIT_WATCH=y
+CONFIG_AUDIT_TREE=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TPM2 (for LUKS auto-unlock)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_TCG_TPM=y
+CONFIG_TCG_TIS=y
+CONFIG_TCG_CRB=y
+CONFIG_TCG_TIS_SPI=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CRYPTOGRAPHY (LUKS, module signing)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_CRYPTO_BLKCIPHER=m
+CONFIG_CRYPTO_AES_NI_INTEL=m
+CONFIG_CRYPTO_AES=m
+CONFIG_MODULE_SIG=y
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_RSA=y
+CONFIG_MODULE_SIG_SHA256=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CPU FREQUENCY SCALING (aggressive turbo for desktop)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_X86_INTEL_CPUFREQ=y
+CONFIG_X86_INTEL_PSTATE=n
+CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
+CONFIG_CPU_FREQ_GOV_POWERSAVE=y
+CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CPU IDLE (C-states, deep C-states cause latency)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_CPU_IDLE_INTEL=y
+CONFIG_ACPI_PROCESSOR=y
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FILESYSTEM: ext4 + tmpfs (no btrfs/xfs bloat unless needed)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_FS_ENCRYPTION=y
+CONFIG_EXT4_FS_VERITY=y
+
+# Disable other filesystems
+CONFIG_BTRFS_FS=n
+CONFIG_XFS_FS=n
+CONFIG_F2FS_FS=n
+CONFIG_JFS_FS=n
+CONFIG_REISERFS_FS=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DISABLE: EVERYTHING ELSE (unused bloat)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# No VM/container support
+CONFIG_KVM=n
+CONFIG_VHOST=n
+CONFIG_VIRTIO=n
+CONFIG_HYPERVISOR_GUEST=n
+
+# No advanced networking
+CONFIG_NETFILTER=n
+CONFIG_BRIDGE=n
+CONFIG_TEAM=n
+CONFIG_VLAN_8021Q=n
+
+# No Bluetooth
+CONFIG_BT=n
+
+# No wireless (if not needed)
+CONFIG_WIRELESS=n
+CONFIG_CFG80211=n
+
+# No exotic filesystems
+CONFIG_NFS_FS=n
+CONFIG_CIFS=n
+CONFIG_SMB_SERVER=n
+
+# No fancy tracing (bloats kernel)
+CONFIG_FTRACE=n
+CONFIG_KPROBES=n
+
+# Minimal debug symbols (if needed at all)
+CONFIG_DEBUG_INFO=n
+CONFIG_DEBUG_KERNEL=n
+CONFIG_SLUB_DEBUG=n
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BUILD FLAGS (set via PKGBUILD, not here, but document)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# CFLAGS will use:
+#   -march=native (only i5-8600K, +3-8% over x86-64-v2)
+#   -O3 (aggressive)
+#   -flto=thin (minimal LTO scope, faster link)
+#   -fpolly -fpolly-vectorize=full (loop optimization)
+#   ... other flags from PKGBUILD
+
+# Build size estimate:
+#   bzImage: ~15-20 MB (vs 50-80 MB for generic)
+#   modules: ~80-150 MB (vs 800MB+ for generic)
+#   Total: ~200-300 MB installed (vs 1.2GB+)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NOTE: This config is SPECIFIC to:
+#   Hardware: i5-8600K, Z370 chipset, GTX 1050 Ti, NVMe SSD
+#   OS: CachyOS (Arch Linux)
+#   NOT portable to other machines
+# ═══════════════════════════════════════════════════════════════════════════

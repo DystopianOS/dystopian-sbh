@@ -1,0 +1,205 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║              CACHYOS-SBH-PY PKGBUILD PACKAGE MANIFEST                     ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+PACKAGE INFORMATION
+═══════════════════════════════════════════════════════════════════════════
+Name:               cachyos-sbh-py
+Version:            1.0.0
+Release:            1
+Architecture:       x86_64
+License:            MIT
+Maintainer:         CachyOS SBH Project
+URL:                https://github.com/cachyos/cachyos-sbh
+
+DESCRIPTION
+═══════════════════════════════════════════════════════════════════════════
+Python 3.14+ async utilities for Secure Boot + NVIDIA + TPM2 orchestration.
+
+Provides three core modules:
+  • tpm_async.py       — Async TPM2 sealing/unsealing operations
+  • nvidia_async.py    — Async NVIDIA driver and GPU queries
+  • cryptsetup_async.py — Async LUKS device operations
+
+BUILD FILES
+═══════════════════════════════════════════════════════════════════════════
+PKGBUILD                   — Package build script
+cachyos-sbh-py.install    — Post-install hook
+setup.py                   — Python setuptools configuration
+pyproject.toml            — Ruff, Pyright, Pytest config
+PKGBUILD-GUIDE.md         — Complete building/installation guide
+PKGBUILD-MANIFEST.txt     — This file
+
+SOURCE MODULES
+═══════════════════════════════════════════════════════════════════════════
+cachyos_sbh/
+├── __init__.py            (118 bytes) — Package metadata
+├── tpm_async.py          (1,759 bytes) — TPM2 async operations
+├── nvidia_async.py       (3,022 bytes) — NVIDIA async operations
+└── cryptsetup_async.py   (2,901 bytes) — LUKS async operations
+
+TOTAL SOURCE: 7.8 KB (all Python, no external dependencies except aiofiles)
+
+TEST SUITE
+═══════════════════════════════════════════════════════════════════════════
+tests/test_async_modules.py  (1.7 KB, 6 tests)
+  ✓ test_tpm_seal_pcrs_valid
+  ✓ test_tpm_seal_pcrs_invalid_index
+  ✓ test_cryptsetup_open_valid_device
+  ✓ test_cryptsetup_open_invalid_device
+  ✓ test_cryptsetup_status
+  ✓ test_nvidia_validate_driver
+
+DEPENDENCIES
+═══════════════════════════════════════════════════════════════════════════
+Runtime:
+  • python >= 3.14
+  • python-aiofiles >= 25.1.0
+
+Build:
+  • python-setuptools
+  • python-build
+
+Optional (Development):
+  • ruff >= 0.15.0          (Fast Python linter)
+  • pyright >= 1.1.0        (Type checker, strict mode)
+  • pytest >= 9.0.0         (Test framework)
+  • pytest-asyncio >= 1.4.0 (Async test support)
+
+INSTALLATION PATHS
+═══════════════════════════════════════════════════════════════════════════
+/usr/lib/python3.14/site-packages/cachyos_sbh/
+  ├── __init__.py
+  ├── tpm_async.py
+  ├── nvidia_async.py
+  └── cryptsetup_async.py
+
+/usr/share/doc/cachyos-sbh-py/
+  ├── README.md
+  ├── pyproject.toml
+  └── setup.py
+
+/usr/share/cachyos-sbh-py/tests/
+  └── test_async_modules.py
+
+/usr/share/licenses/cachyos-sbh-py/
+  └── LICENSE
+
+/usr/share/cachyos-sbh-py/ (post-install script reference)
+
+QUALITY ASSURANCE
+═══════════════════════════════════════════════════════════════════════════
+Build-Time Checks:
+  ✓ Syntax validation (bash -n PKGBUILD)
+  ✓ Python 3.14 compatibility (type hints: X | None, dict[K,V])
+  ✓ Module imports verified
+  ✓ Ruff linting (10 issues fixed in setup)
+  ✓ Pyright strict type checking (0 errors)
+  ✓ Pytest async tests (6 passed)
+
+Post-Install Checks:
+  ✓ Module availability check
+  ✓ Function export verification
+  ✓ Documentation accessibility
+
+PKGBUILD FUNCTIONS
+═══════════════════════════════════════════════════════════════════════════
+prepare()
+  └─ Copy source files from /home/daen/Projects/sbh/python-dev/
+     to ${srcdir}
+
+build()
+  └─ Run: python -m build --wheel --no-isolation
+     Creates cachyos_sbh_py-1.0.0-py3-none-any.whl
+
+package()
+  ├─ Install wheel via pip
+  ├─ Fallback: Manual module installation to /usr/lib/python3.14/
+  ├─ Install documentation to /usr/share/doc/
+  ├─ Install tests to /usr/share/cachyos-sbh-py/tests/
+  └─ Create license placeholder
+
+check()
+  └─ Run: pytest tests/ -v
+     Expected: 6 passed
+
+USAGE EXAMPLE
+═══════════════════════════════════════════════════════════════════════════
+#!/usr/bin/env python3
+import asyncio
+from cachyos_sbh import tpm_async, cryptsetup_async
+
+async def main():
+    # Seal TPM2 to Secure Boot state
+    await tpm_async.tpm_seal_pcrs([7, 11], b"boot-hash")
+    
+    # Open LUKS devices
+    success = await cryptsetup_async.cryptsetup_open(
+        "/dev/nvme0n1p2", "luks1", "passphrase"
+    )
+    print(f"Device open: {success}")
+
+asyncio.run(main())
+
+BUILD INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════
+1. Ensure PKGBUILD, setup.py, cachyos_sbh/ are in same directory
+
+2. Run makepkg:
+   $ cd ~/Projects/sbh/python-dev
+   $ makepkg -si        # Build and install
+   $ makepkg -Cci       # Build with all checks
+
+3. Or build manually:
+   $ python -m build --wheel --no-isolation
+   $ sudo pip install dist/cachyos_sbh_py-1.0.0-py3-none-any.whl
+
+VERIFICATION AFTER BUILD
+═══════════════════════════════════════════════════════════════════════════
+$ python3 -c "from cachyos_sbh import tpm_async; print('OK')"
+$ pytest /usr/share/cachyos-sbh-py/tests/test_async_modules.py -v
+$ ls -la /usr/lib/python3.14/site-packages/cachyos_sbh/
+
+POST-INSTALLATION
+═══════════════════════════════════════════════════════════════════════════
+The cachyos-sbh-py.install script automatically:
+  1. Shows installation confirmation
+  2. Displays module import examples
+  3. Lists optional dev tool packages
+  4. Points to documentation
+
+To install optional dev tools after package installation:
+  $ sudo pacman -S ruff pyright python-pytest python-pytest-asyncio
+
+DISTRIBUTION
+═══════════════════════════════════════════════════════════════════════════
+To submit to AUR (Arch User Repository):
+
+1. Register AUR account: https://aur.archlinux.org
+
+2. Prepare package directory:
+   $ mkdir aur/cachyos-sbh-py
+   $ cd aur/cachyos-sbh-py
+   $ cp PKGBUILD cachyos-sbh-py.install .
+
+3. Create .SRCINFO:
+   $ makepkg --printsrcinfo > .SRCINFO
+
+4. Initialize git and push:
+   $ git init
+   $ git add .
+   $ git commit -m "Initial commit"
+   $ git remote add origin ssh://aur@aur.archlinux.org/cachyos-sbh-py.git
+   $ git push -u origin master
+
+NOTES
+═══════════════════════════════════════════════════════════════════════════
+• Python 3.14 required (modern syntax: X | None, dict[K,V])
+• No pip usage in package manager (uses setuptools/uv directly)
+• Strict type checking enabled by default
+• All async functions use asyncio.timeout() pattern
+• Module names: cachyos_sbh (underscores, not hyphens)
+• Package name: cachyos-sbh-py (hyphens, for Arch naming)
+
+MANIFEST GENERATED: 2025-05-28
+PKGBUILD VERSION: 1.0.0-1

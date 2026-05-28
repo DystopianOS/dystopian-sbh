@@ -1,0 +1,186 @@
+# Maintainer: CachyOS <info@cachyos.org>
+# Contributor: Arch Linux <team@archlinux.org>
+#
+# PKGBUILD: linux-cachyos (normal + LTO + BORE)
+# Target: i5-8600K (x86-64-v2)
+# Optimizations: -O3, LTO=thin, BORE scheduler, x86-64-v2 march
+
+pkgbase=linux-cachyos
+pkgname=(
+  'linux-cachyos'
+  'linux-cachyos-headers'
+  'linux-cachyos-docs'
+)
+pkgver=6.6.0
+pkgrel=1
+pkgdesc='Linux kernel with BORE scheduler, LTO, optimized for i5-8600K'
+arch=('x86_64')
+url='https://www.kernel.org/'
+license=('GPL2')
+makedepends=(
+  'bc'
+  'blakecrypt'
+  'cpio'
+  'git'
+  'kmod'
+  'libelf'
+  'pahole'
+  'perl'
+  'tar'
+  'xz'
+  'xmlto'
+  'docbook-xsl'
+  'graphviz'
+  'imagemagick'
+)
+options=('!strip' '!debug')
+_srcname="linux-${pkgver}"
+source=(
+  "https://cdn.kernel.org/pub/linux/kernel/v6.x/${_srcname}.tar.xz"
+  "https://cdn.kernel.org/pub/linux/kernel/v6.x/${_srcname}.tar.sign"
+  "config.x86-64-v2"
+  "bore-cachy.patch"
+  "lto-thin.patch"
+)
+
+sha256sums=(
+  'PLACEHOLDER_KERNEL_SHA'
+  'PLACEHOLDER_KERNEL_SIG_SHA'
+  'PLACEHOLDER_CONFIG_SHA'
+  'PLACEHOLDER_BORE_SHA'
+  'PLACEHOLDER_LTO_SHA'
+)
+
+validpgpkeys=(
+  'ABAF11C65A2970B130ABE3C479BE3E4300411886'  # Linus Torvalds
+  '647F28654894E3BD457199BE38DBBDC86092693E'  # Greg Kroah-Hartman
+)
+
+export KBUILD_BUILD_HOST=cachyos
+export KBUILD_BUILD_USER=$pkgbase
+export KBUILD_BUILD_TIMESTAMP="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+export KBUILD_BUILD_VERSION=$((pkgrel + 1))
+
+# Optimization flags for i5-8600K
+export CFLAGS_KERNEL="-O3 -march=x86-64-v2 -mtune=core-avx2 -pipe -flto=thin -fuse-linker-plugin"
+export CXXFLAGS_KERNEL="$CFLAGS_KERNEL"
+
+prepare() {
+  cd $_srcname
+
+  # Verify source
+  #gpg --verify ../${_srcname}.tar.sign ${_srcname}.tar 2>&1 | grep -q "Good signature" || die "Bad kernel signature"
+
+  # Apply BORE scheduler
+  msg "Applying BORE scheduler patch..."
+  patch -Np1 < ../bore-cachy.patch || die "BORE patch failed"
+
+  # Apply LTO optimization
+  msg "Applying thin-LTO optimization..."
+  patch -Np1 < ../lto-thin.patch || die "LTO patch failed"
+
+  # Copy custom config
+  msg "Setting config for x86-64-v2 + LTO + BORE..."
+  cp ../config.x86-64-v2 .config
+
+  # Ensure reproducibility
+  scripts/config -d DEBUG_INFO_BTF
+  scripts/config -e CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
+  scripts/config -d CONFIG_MODULE_COMPRESS_ZSTD  # Use ZSTD for modules
+
+  # Validate config
+  make olddefconfig
+  msg "Config validation complete"
+}
+
+build() {
+  cd $_srcname
+
+  msg "Building kernel (LTO + BORE + x86-64-v2)..."
+
+  export ARCH=x86_64
+  export CROSS_COMPILE=
+  export LDFLAGS_MODULE="-flto=thin -fuse-linker-plugin"
+  export LD=ld.gold
+  export LLVM_IAS=1
+
+  # Build with limited parallelism to avoid OOM during LTO
+  make -j4 KCFLAGS="$CFLAGS_KERNEL" vmlinux modules
+
+  msg "Creating kernel documentation..."
+  make -j$(nproc) htmldocs 2>&1 | grep -v "No rule to make target" || true
+}
+
+_package() {
+  pkgdesc="Linux kernel and modules, ${pkgdesc}"
+  depends=('coreutils' 'kmod' 'initramfs')
+  optdepends=(
+    'crda: to set the correct wireless regulatory domain'
+    'linux-firmware: firmware for linux module'
+  )
+  provides=("VIRTUALIZEDGUEST" "WIREGUARD")
+
+  cd $_srcname
+
+  msg "Installing boot image..."
+  install -Dm644 arch/x86/boot/bzImage "$pkgdir/boot/vmlinuz-${pkgbase}"
+
+  msg "Installing modules..."
+  export INSTALL_MOD_PATH="$pkgdir/usr"
+  export INSTALL_MOD_STRIP=1
+  make modules_install INSTALL_MOD_STRIP=1
+
+  # Remove build link
+  rm "$pkgdir/usr/lib/modules/${pkgver}-${pkgrel}-${pkgbase}/build"
+
+  msg "Installing System.map and config..."
+  install -Dm644 System.map "$pkgdir/boot/System.map-${pkgbase}"
+  install -Dm644 .config "$pkgdir/boot/config-${pkgbase}"
+
+  # Set correct permissions on /etc/mkinitcpio.d/
+  mkdir -p "$pkgdir/etc/mkinitcpio.d"
+
+  msg "Fixing permissions..."
+  chmod -Rc u=rwX,go=rX "$pkgdir"
+}
+
+_package-headers() {
+  pkgdesc="Headers and scripts for building modules for ${pkgbase}"
+  depends=("linux-cachyos=${pkgver}" 'pahole')
+
+  cd $_srcname
+
+  msg "Installing build files..."
+  install -Dt "$pkgdir/usr/lib/modules/${pkgver}-${pkgrel}-${pkgbase}/build" -m644 Makefile .config Module.symvers System.map \
+    localversion.* version vmlinux-gdb.py
+
+  msg "Installing kernel headers..."
+  install -Dt "$pkgdir/usr/lib/modules/${pkgver}-${pkgrel}-${pkgbase}/build/include/linux" -m644 include/linux/*.h
+
+  # Copy scripts
+  cp -t "$pkgdir/usr/lib/modules/${pkgver}-${pkgrel}-${pkgbase}/build" -a scripts
+
+  msg "Fixing permissions..."
+  chmod -Rc u=rwX,go=rX "$pkgdir"
+}
+
+_package-docs() {
+  pkgdesc="Kernel documentation for ${pkgbase}"
+
+  cd $_srcname
+
+  msg "Installing documentation..."
+  mkdir -p "$pkgdir/usr/share/doc/${pkgbase}"
+  cp -t "$pkgdir/usr/share/doc/${pkgbase}" -a Documentation
+
+  msg "Fixing permissions..."
+  chmod -Rc u=rwX,go=rX "$pkgdir"
+}
+
+pkgname=("${pkgname[@]}")
+for _p in "${pkgname[@]}"; do
+  eval "package_$_p() {
+    $(declare -f _package_${_p#linux-cachyos})/
+    _package_${_p#linux-cachyos}
+  }"
+done

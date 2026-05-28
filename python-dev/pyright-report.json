@@ -1,0 +1,49 @@
+Config contains unrecognized setting "analyzeUntypedBaseClasses".
+Config contains unrecognized setting "reportShadowedImports".
+Config contains unrecognized setting "strictParameterNoneDefault".
+{
+    "version": "1.1.409",
+    "time": "1779984199740",
+    "generalDiagnostics": [
+        {
+            "file": "/home/daen/Projects/sbh/python-dev/src/tpm_async.py",
+            "severity": "error",
+            "message": "Type of \"passphrase\" is unknown",
+            "range": {
+                "start": {
+                    "line": 54,
+                    "character": 8
+                },
+                "end": {
+                    "line": 54,
+                    "character": 18
+                }
+            },
+            "rule": "reportUnknownVariableType"
+        },
+        {
+            "file": "/home/daen/Projects/sbh/python-dev/src/tpm_async.py",
+            "severity": "error",
+            "message": "No parameter named \"timeout\"",
+            "range": {
+                "start": {
+                    "line": 54,
+                    "character": 65
+                },
+                "end": {
+                    "line": 54,
+                    "character": 72
+                }
+            },
+            "rule": "reportCallIssue"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 5,
+        "errorCount": 2,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 0.5
+    }
+}
+

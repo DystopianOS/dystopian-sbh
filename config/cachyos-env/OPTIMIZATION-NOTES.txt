@@ -1,0 +1,109 @@
+KERNEL SIZE REDUCTION OPTIONS
+═══════════════════════════════════════════════════════════════════════════
+
+To strip documentation and debug symbols from CachyOS kernel builds,
+add these environment variables to any .env file:
+
+DOCUMENTATION STRIPPING
+───────────────────────
+
+# Disable kernel documentation build
+export _skip_docs=yes
+
+# Disable debug symbols in kernel image
+export DEBUG_OPTS="-g0"  # Remove all debug info
+
+# Disable module debug symbols
+export _strip_modules=yes
+
+# Disable Python documentation
+export _skip_python_docs=yes
+
+KERNEL CONFIG OPTIONS
+──────────────────────
+
+# In kernel .config file, disable:
+CONFIG_DEBUG_INFO=n          # No debug symbols
+CONFIG_DEBUG_INFO_BTF=n      # No BTF debug
+CONFIG_KUNIT=n               # No kernel unit tests
+CONFIG_KUNIT_DEBUGFS=n       # No KUnit debug
+
+# Also reduce bloat:
+CONFIG_MODULE_FORCE_LOAD=n   # Don't load incompatible modules
+CONFIG_LOGO=n                # No boot logo
+CONFIG_SND_DEBUG=n           # No sound debug
+CONFIG_VIDEO_DEBUG=n         # No video debug
+
+EXPECTED SIZE REDUCTIONS
+────────────────────────
+
+Standard kernel:        ~26-35 MB
+- Debug symbols:       ~30-50 MB
+- Docs:               ~2-5 MB
+- Python docs:        ~1-3 MB
+
+After stripping:        ~15-22 MB (30-40% reduction)
+
+SECURITY TRADEOFF
+─────────────────
+
+Removing debug symbols:
+  ✓ Reduces kernel size by 30-50 MB
+  ✗ Harder to debug kernel panics
+  ✗ Kernel oops less useful
+  ✗ Performance profiling harder
+  
+RECOMMENDATION: Strip in production, keep for testing
+
+IMPLEMENTATION
+───────────────
+
+Option 1: Add to environment files:
+
+  export _skip_docs=yes
+  export DEBUG_OPTS="-g0"
+  export _strip_modules=yes
+
+Option 2: Modify kernel config:
+
+  # In CachyOS PKGBUILD prepare() function, add:
+  # scripts/config --disable DEBUG_INFO
+  # scripts/config --disable DEBUG_INFO_BTF
+
+Option 3: Post-build stripping:
+
+  # After makepkg, manually strip:
+  strip --strip-debug /boot/vmlinuz-*
+  find /lib/modules -name "*.ko*" -exec strip --strip-unneeded {} \;
+
+AUTOMATED STRIPPING (POST-INSTALL)
+──────────────────────────────────
+
+Create ~/Projects/sbh/bin/strip-kernel-debug.sh:
+
+  #!/bin/bash
+  # Strip debug symbols from kernel and modules
+  
+  set -e
+  
+  if [[ $EUID -ne 0 ]]; then
+    echo "Must run as root"
+    exit 1
+  fi
+  
+  KERNEL_VER=$(uname -r)
+  KERNEL_PATH="/boot/vmlinuz-$KERNEL_VER"
+  MODULE_PATH="/lib/modules/$KERNEL_VER/kernel"
+  
+  echo "[*] Stripping kernel debug symbols..."
+  strip --strip-debug "$KERNEL_PATH" 2>/dev/null || echo "  (already stripped)"
+  
+  echo "[*] Stripping module debug symbols..."
+  find "$MODULE_PATH" -name "*.ko*" -type f | while read -r mod; do
+    strip --strip-unneeded "$mod" 2>/dev/null || true
+  done
+  
+  echo "[+] Done. Kernel size after stripping:"
+  ls -lh "$KERNEL_PATH"
+  du -sh "$MODULE_PATH"
+

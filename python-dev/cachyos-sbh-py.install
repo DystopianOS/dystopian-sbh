@@ -1,0 +1,21 @@
+post_install() {
+    echo "==> CachyOS SBH Python Utilities installed"
+    echo ""
+    echo "To use the async modules in your scripts:"
+    echo "  python3 -c 'from cachyos_sbh import tpm_async'"
+    echo ""
+    echo "Or install dev tools for linting/type-checking:"
+    echo "  pacman -S ruff pyright python-pytest python-pytest-asyncio"
+    echo ""
+    echo "View documentation:"
+    echo "  less /usr/share/doc/cachyos-sbh-py/README.md"
+    echo ""
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    echo "==> CachyOS SBH Python Utilities removed"
+}
