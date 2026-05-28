@@ -227,6 +227,15 @@ bootctl status | grep -i "secure boot"
 systemd-cryptenroll --list-devices
 ```
 
+### Shell script smoke check
+
+```bash
+# Validate the shell helpers locally
+bash bin/verify-shell-scripts.sh
+```
+
+The same check runs in GitHub Actions on changes under `bin/**/*.sh`.
+
 ## Performance Impact
 
 - **Secure Boot**: negligible (firmware check at boot)
