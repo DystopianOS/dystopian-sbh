@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Complete UKI + Secure Boot setup for NVIDIA 580
 # This script orchestrates all setup steps
 # Run with: sudo /home/daen/Projects/sbh/bin/setup-complete-uki.sh
 
-set -e
+set -euo pipefail
 
 if [ "$EUID" -ne 0 ]; then
   echo "ERROR: This script must run as root (sudo)"

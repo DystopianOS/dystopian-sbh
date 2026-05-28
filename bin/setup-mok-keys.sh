@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Setup MOK (Machine Owner Key) for NVIDIA 580 Secure Boot
 # Run with: sudo /home/daen/Projects/sbh/bin/setup-mok-keys.sh
 
-set -e
+set -euo pipefail
 
 if [ "$EUID" -ne 0 ]; then
   echo "ERROR: This script must run as root (sudo)"
@@ -14,6 +14,7 @@ echo "=== Setting up MOK keys for NVIDIA 580 Secure Boot ==="
 # Generate MOK keys
 KEYDIR="/tmp/mok-gen-$$"
 mkdir -p "$KEYDIR"
+trap 'rm -rf "$KEYDIR"' EXIT
 
 echo "Generating RSA 2048-bit key and certificate..."
 openssl req -new -x509 -newkey rsa:2048 \
@@ -37,9 +38,6 @@ ls -lh /root/MOK.*
 echo ""
 echo "Certificate details:"
 openssl x509 -in /root/MOK.crt -noout -subject
-
-# Cleanup
-rm -rf "$KEYDIR"
 
 echo ""
 echo "✓ MOK setup complete"

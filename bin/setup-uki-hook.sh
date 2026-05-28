@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Create pacman hook for automatic UKI regeneration on kernel update
 # Run with: sudo /home/daen/Projects/sbh/bin/setup-uki-hook.sh
 
-set -e
+set -euo pipefail
 
 if [ "$EUID" -ne 0 ]; then
   echo "ERROR: This script must run as root (sudo)"
@@ -37,20 +37,36 @@ echo "Creating UKI generation script..."
 mkdir -p /usr/local/bin
 
 cat > /usr/local/bin/generate-uki.sh << 'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # CachyOS UKI generation script with NVIDIA 580
 
-set -e
+set -euo pipefail
 
-KERNEL_VERSION=$(ls -t /usr/lib/modules 2>/dev/null | grep -E "cachyos|zen|bore" | head -1)
+resolve_root_uuid() {
+  local root_uuid root_source
+
+  root_uuid="$(findmnt -no UUID / 2>/dev/null || true)"
+  if [ -n "${root_uuid:-}" ]; then
+    printf '%s\n' "$root_uuid"
+    return 0
+  fi
+
+  root_source="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  [ -n "${root_source:-}" ] || return 1
+  root_source="$(readlink -f "$root_source" 2>/dev/null || printf '%s' "$root_source")"
+  blkid -s UUID -o value "$root_source" 2>/dev/null || return 1
+}
+
+KERNEL_VERSION="$(ls -1 /usr/lib/modules 2>/dev/null | sort -V | tail -1)"
 
 if [ -z "$KERNEL_VERSION" ]; then
   echo "ERROR: No CachyOS kernel found in /usr/lib/modules"
   exit 1
 fi
 
-KERNEL_IMAGE="/boot/vmlinuz-linux-cachyos"
-INITRD="/boot/initramfs-linux-cachyos.img"
+PKGBASE="$(cat "/usr/lib/modules/${KERNEL_VERSION}/pkgbase" 2>/dev/null || echo linux-cachyos)"
+KERNEL_IMAGE="/usr/lib/modules/${KERNEL_VERSION}/vmlinuz"
+INITRD="/boot/initramfs-${PKGBASE}.img"
 
 # Detect microcode
 if [ -f "/boot/intel-ucode.img" ]; then
@@ -62,6 +78,7 @@ else
 fi
 
 OUTPUT="/efi/EFI/Linux/cachyos-linux.efi"
+CMDLINE_FILE="/etc/kernel/cmdline.d/99-bootchain.conf"
 MOK_KEY="/root/MOK.key"
 MOK_CRT="/root/MOK.crt"
 
@@ -78,26 +95,36 @@ if [ ! -f "$INITRD" ]; then
   exit 1
 fi
 
+mkdir -p "$(dirname "$CMDLINE_FILE")"
+if [ ! -s "$CMDLINE_FILE" ] || ! grep -q '^root=' "$CMDLINE_FILE"; then
+  ROOT_UUID="$(resolve_root_uuid)"
+  if [ -z "${ROOT_UUID:-}" ]; then
+    echo "ERROR: Unable to determine root UUID"
+    exit 1
+  fi
+  cat > "$CMDLINE_FILE" <<EOF_CMDLINE
+root=UUID=${ROOT_UUID} rw quiet nvidia_drm.modeset=1 loglevel=3
+EOF_CMDLINE
+fi
+
 # Create EFI directory if it doesn't exist
 mkdir -p "$(dirname "$OUTPUT")"
 
 # Build UKI with ukify
 echo "Building UKI..."
-CMDLINE="root=PARTUUID=$(blkid -s PARTUUID -o value /dev/disk/by-path/pci-*-part*) rw quiet nvidia_drm.modeset=1 quiet loglevel=3"
-
 if [ -n "$MICROCODE" ]; then
   ukify build \
     --linux "$KERNEL_IMAGE" \
     --initrd "$MICROCODE" \
     --initrd "$INITRD" \
-    --cmdline "$CMDLINE" \
-    --output "$OUTPUT" || true
+    --cmdline "@$CMDLINE_FILE" \
+    --output "$OUTPUT"
 else
   ukify build \
     --linux "$KERNEL_IMAGE" \
     --initrd "$INITRD" \
-    --cmdline "$CMDLINE" \
-    --output "$OUTPUT" || true
+    --cmdline "@$CMDLINE_FILE" \
+    --output "$OUTPUT"
 fi
 
 echo "✓ UKI generated: $OUTPUT"
@@ -106,7 +133,7 @@ echo "✓ UKI generated: $OUTPUT"
 if [ -f "$MOK_KEY" ] && [ -f "$MOK_CRT" ]; then
   echo "Signing UKI with Secure Boot key..."
   sbsign --key "$MOK_KEY" --cert "$MOK_CRT" \
-    --output "$OUTPUT" "$OUTPUT" || echo "WARNING: Signing failed (Secure Boot may be disabled)"
+    --output "$OUTPUT" "$OUTPUT"
   echo "✓ UKI signed"
 fi
 

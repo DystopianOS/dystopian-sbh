@@ -43,6 +43,25 @@ die(){ printf '[✗] %s\n' "$*" >&2; exit 1; }
 has(){ command -v "$1" >/dev/null 2>&1; }
 req(){ has "$1" || die "Missing command: $1"; }
 
+root_cmdline(){
+  local root_uuid root_source
+
+  root_uuid="$(findmnt -no UUID / 2>/dev/null || true)"
+  if [ -n "${root_uuid:-}" ]; then
+    echo "root=UUID=${root_uuid}"
+    return 0
+  fi
+
+  root_source="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  [ -n "${root_source:-}" ] || die "Unable to determine root filesystem source"
+
+  root_source="$(readlink -f "$root_source" 2>/dev/null || printf '%s' "$root_source")"
+  root_uuid="$(blkid -s UUID -o value "$root_source" 2>/dev/null || true)"
+  [ -n "${root_uuid:-}" ] || die "Unable to determine root filesystem UUID"
+
+  echo "root=UUID=${root_uuid}"
+}
+
 sb_state(){
   # Try multiple detection methods with graceful fallbacks
   
@@ -105,11 +124,29 @@ backup_luks_headers(){
 build_sign_uki(){
   local kver="$1" out="$2"
   local vmlinuz="/usr/lib/modules/${kver}/vmlinuz"
-  local initramfs="/boot/initramfs-linux.img"
+  local initramfs=""
   local cmdline="/etc/kernel/cmdline.d/99-bootchain.conf"
+  local pkgbase=""
 
   [ -f "$vmlinuz" ] || { log "Skipping UKI for $kver (vmlinuz not found)"; return 0; }
-  [ -f "$initramfs" ] || { log "Skipping UKI for $kver (initramfs not found)"; return 0; }
+
+  if [ -r "/usr/lib/modules/${kver}/pkgbase" ]; then
+    pkgbase="$(cat "/usr/lib/modules/${kver}/pkgbase")"
+  fi
+
+  for candidate in \
+    "/boot/initramfs-${pkgbase}.img" \
+    "/boot/initramfs-linux.img" \
+    "/boot/initramfs-linux-cachyos.img" \
+    "/boot/initramfs-linux-zen.img" \
+    "/boot/initramfs-linux-hardened.img"; do
+    if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+      initramfs="$candidate"
+      break
+    fi
+  done
+
+  [ -n "$initramfs" ] || { log "Skipping UKI for $kver (initramfs not found)"; return 0; }
 
   req ukify
   log "Building UKI for $kver → $out"
@@ -136,7 +173,9 @@ install_kernel_cmdline(){
   mkdir -p /etc/kernel/cmdline.d
   # NOTE: module.sig_enforce=1 removed because module signing not yet implemented
   # TODO: Implement module signing (via sbctl or CachyOS PKGBUILD) and re-enable
-  local cmdline="lockdown=confidentiality efi=attr_uc mce=0 page_poison=1 vsyscall=none spec_store_bypass_disable=on l1tf=full spec_rstack_overflow=smash pti=on kexec_load_disabled=1"
+  local cmdline
+
+  cmdline="$(root_cmdline) rw lockdown=confidentiality efi=attr_uc mce=0 page_poison=1 vsyscall=none spec_store_bypass_disable=on l1tf=full spec_rstack_overflow=smash pti=on kexec_load_disabled=1"
    
   [ "$ENABLE_IMA" = "1" ] && cmdline="$cmdline ima=enforce ima_policy=tcb ima_hash=sha256"
 
@@ -247,11 +286,27 @@ command -v ukify >/dev/null 2>&1 || exit 0
 [ -f /etc/kernel/cmdline.d/99-bootchain.conf ] || exit 0
 
 kver="$1"
+pkgbase=""
 vmlinuz="/usr/lib/modules/${kver}/vmlinuz"
-initramfs="/boot/initramfs-linux.img"
 output="${EFI_MOUNT}/EFI/Linux/cachyos-uki.efi"
 
-[ -f "$vmlinuz" ] && [ -f "$initramfs" ] || exit 0
+if [ -r "/usr/lib/modules/${kver}/pkgbase" ]; then
+  pkgbase="$(cat "/usr/lib/modules/${kver}/pkgbase")"
+fi
+
+for candidate in \
+  "/boot/initramfs-${pkgbase}.img" \
+  "/boot/initramfs-linux.img" \
+  "/boot/initramfs-linux-cachyos.img" \
+  "/boot/initramfs-linux-zen.img" \
+  "/boot/initramfs-linux-hardened.img"; do
+  if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+    initramfs="$candidate"
+    break
+  fi
+done
+
+[ -f "$vmlinuz" ] && [ -n "${initramfs:-}" ] || exit 0
 
 ucode=""
 [ -f /boot/intel-ucode.img ] && ucode="--initrd=/boot/intel-ucode.img"
@@ -263,13 +318,20 @@ log "Built and signed: $output"
 EOF
   chmod 755 "$UKI_BUILD_HOOK"
 
-  cat > "$MKINITCPIO_PRESET" <<'EOF'
+  local pkgbase
+  if [ -r "/usr/lib/modules/$(uname -r)/pkgbase" ]; then
+    pkgbase="$(cat "/usr/lib/modules/$(uname -r)/pkgbase")"
+  else
+    pkgbase="linux"
+  fi
+
+  cat > "$MKINITCPIO_PRESET" <<EOF
 ALL_config="/etc/mkinitcpio.conf"
-ALL_kver="/boot/vmlinuz-linux"
+ALL_kver="/boot/vmlinuz-${pkgbase}"
 PRESETS=('default' 'fallback')
-default_image="/boot/initramfs-linux.img"
-default_options="--kernel /boot/vmlinuz-linux"
-fallback_image="/boot/initramfs-linux-fallback.img"
+default_image="/boot/initramfs-${pkgbase}.img"
+default_options="--kernel /boot/vmlinuz-${pkgbase}"
+fallback_image="/boot/initramfs-${pkgbase}-fallback.img"
 fallback_options="-S autodetect"
 EOF
 }
