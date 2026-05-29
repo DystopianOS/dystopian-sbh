@@ -49,8 +49,8 @@ package() {
     install -Dm755 "$script" "$libdir/$(basename "$script")"
   done
 
-  install -Dm644 hooks/98-dystopian-kernel-toolchain-sonames.hook \
-    "$pkgdir/usr/share/libalpm/hooks/98-dystopian-kernel-toolchain-sonames.hook"
+  install -Dm644 hooks/60-dystopian-kernel-toolchain-sonames.hook \
+    "$pkgdir/usr/share/libalpm/hooks/60-dystopian-kernel-toolchain-sonames.hook"
 
   # Expose user-facing launchers in /usr/bin.
   make_launcher() {
