@@ -10,7 +10,6 @@ arch=('x86_64')
 license=('MIT')
 url="https://github.com/DystopianOS/${pkgname}"
 groups=('dystopian')
-source=("git+https://github.com/DystopianOS/dystopian-sbh#commit=b1d8abcdbe793975ef63e5f39751bcab77942c32")
 makedepends=('git')
 depends=('bash' 'efibootmgr' 'grub' 'systemd')
 optdepends=(
@@ -22,16 +21,8 @@ optdepends=(
 provides=('dystopian-sbh')
 conflicts=('dystopian-sbh')
 
-sha512sums=('SKIP')
-b2sums=('SKIP')
-
-validpgpkeys=(
-  '14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
-  'C71C37EA17233736b9fad43efad24da0784d363a'
-)
-
 package() {
-  cd "$srcdir/$pkgname"
+  cd "$startdir"
 
   local libdir="$pkgdir/usr/lib/dystopian-sbh"
   local bindir="$pkgdir/usr/bin"
