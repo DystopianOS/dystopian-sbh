@@ -33,15 +33,52 @@ validpgpkeys=(
 package() {
   cd "$srcdir/$pkgname"
 
-  # Install main orchestrator binary to /usr/bin/
-  install -Dm755 bin/dystopian-sbh.sh "$pkgdir/usr/bin/dystopian-sbh"
+  local libdir="$pkgdir/usr/lib/dystopian-sbh"
+  local bindir="$pkgdir/usr/bin"
 
-  # Install helper scripts
-  install -Dm755 bin/build-from-scratch.sh "$pkgdir/usr/bin/dystopian-sbh-build"
-  install -Dm755 bin/generate-cachyos-env.sh "$pkgdir/usr/bin/dystopian-sbh-gen-env"
-  install -Dm755 bin/hw-detect-optimize.sh "$pkgdir/usr/bin/dystopian-sbh-hw-detect"
-  install -Dm755 bin/secureboot-uki-tpm.sh "$pkgdir/usr/bin/dystopian-sbh-secureboot-uki"
-  install -Dm755 bin/strip-kernel-debug.sh "$pkgdir/usr/bin/dystopian-sbh-strip-debug"
+  install -d "$libdir" "$bindir"
+
+  # Install all runtime scripts into a shared helper directory.
+  for script in \
+    bin/dystopian-sbh.sh \
+    bin/build-from-scratch.sh \
+    bin/generate-cachyos-env.sh \
+    bin/hw-detect-optimize.sh \
+    bin/secureboot-uki-tpm.sh \
+    bin/strip-kernel-debug.sh \
+    bin/setup-complete-uki.sh \
+    bin/setup-uki-hook.sh \
+    bin/setup-dkms-signing.sh \
+    bin/setup-mok-keys.sh \
+    bin/enroll-mok.sh \
+    bin/verify-uki-setup.sh \
+    bin/verify-shell-scripts.sh \
+    bin/repair-kernel-toolchain-sonames.sh
+  do
+    install -Dm755 "$script" "$libdir/$(basename "$script")"
+  done
+
+  install -Dm644 hooks/98-dystopian-kernel-toolchain-sonames.hook \
+    "$pkgdir/usr/share/libalpm/hooks/98-dystopian-kernel-toolchain-sonames.hook"
+
+  # Expose user-facing launchers in /usr/bin.
+  make_launcher() {
+    local name="$1"
+    local target="$2"
+
+    cat > "$bindir/$name" <<EOF
+#!/bin/sh
+exec /usr/lib/dystopian-sbh/$target "\$@"
+EOF
+    chmod 755 "$bindir/$name"
+  }
+
+  make_launcher dystopian-sbh dystopian-sbh.sh
+  make_launcher dystopian-sbh-build build-from-scratch.sh
+  make_launcher dystopian-sbh-gen-env generate-cachyos-env.sh
+  make_launcher dystopian-sbh-hw-detect hw-detect-optimize.sh
+  make_launcher dystopian-sbh-secureboot-uki secureboot-uki-tpm.sh
+  make_launcher dystopian-sbh-strip-debug strip-kernel-debug.sh
 
   # Install kernel configs
   install -Dm644 config/config.native-minimal "$pkgdir/usr/share/dystopian-sbh/config/config.native-minimal"

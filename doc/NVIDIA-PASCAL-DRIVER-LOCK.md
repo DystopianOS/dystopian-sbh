@@ -583,7 +583,6 @@ Target = nvidia-580xx-dkms
 Description = Generating Unified Kernel Image...
 When = PostTransaction
 Exec = /usr/lib/dystopian-sbh/generate-uki.sh
-Exec = /usr/lib/dystopian-sbh/generate-uki.sh
 ```
 
 Create `/usr/lib/dystopian-sbh/generate-uki.sh`:
