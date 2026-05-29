@@ -1,0 +1,127 @@
+name: Auto version and release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip release]')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: latest_tag
+        uses: DCx7C5/actions/tag-get-latest@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Calculate next version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest="${{ steps.latest_tag.outputs.tag_name }}"
+          if [[ -z "$latest" || "$latest" == "null" ]]; then
+            latest="v0.0.0"
+            range=""
+          else
+            range="${latest}..HEAD"
+          fi
+
+          core="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$core"
+
+          if [[ -n "$range" ]]; then
+            commit_text="$(git log --format='%s%n%b' "$range")"
+            release_notes="$(git log --format='- %h %s (%an)' "$range")"
+          else
+            commit_text="$(git log --format='%s%n%b')"
+            release_notes="$(git log --format='- %h %s (%an)')"
+          fi
+
+          bump="patch"
+          if grep -Eq 'BREAKING CHANGE|^[^ ]+!:' <<< "$commit_text"; then
+            bump="major"
+          elif grep -Eq '^feat(\(|:)' <<< "$commit_text"; then
+            bump="minor"
+          fi
+
+          case "$bump" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          new_version="${major}.${minor}.${patch}"
+          new_tag="v${new_version}"
+
+          if [[ -z "$release_notes" ]]; then
+            release_notes="- No user-facing changes recorded."
+          fi
+
+          echo "latest_tag=${latest}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "new_tag=${new_tag}" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_notes<<EOF"
+            echo "$release_notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump script version
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i -E 's/^readonly PROG_VERSION="[0-9]+\.[0-9]+\.[0-9]+"/readonly PROG_VERSION="${{ steps.version.outputs.new_version }}"/' bin/dystopian-sbh.sh
+
+      - name: Stage version bump
+        shell: bash
+        run: git add bin/dystopian-sbh.sh
+
+      - name: Commit version bump
+        id: commit
+        uses: DCx7C5/actions/git-commit@v1
+        with:
+          message: "chore(release): bump version to ${{ steps.version.outputs.new_tag }} [skip release]"
+          skip-if-no-changes: "true"
+
+      - name: Push bump commit
+        if: steps.commit.outputs.committed == 'true'
+        uses: DCx7C5/actions/git-push-changes@v1
+        with:
+          gh-token: ${{ github.token }}
+
+      - name: Create and push release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
+          git push origin "${{ steps.version.outputs.new_tag }}"
+
+      - name: Create GitHub release
+        uses: DCx7C5/actions/gh-create-release@v1
+        with:
+          release-tag: ${{ steps.version.outputs.new_tag }}
+          release-name: ${{ steps.version.outputs.new_tag }}
+          release-body: ${{ steps.version.outputs.release_notes }}
+          gh-token: ${{ github.token }}
