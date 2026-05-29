@@ -49,15 +49,22 @@ This will:
 - Sign all EFI artifacts
 - Install hardening (kernel cmdline, sysctl, audit rules)
 - Set up systemd-boot
-- Configure automatic Stage 1 finalization on next boot
-- **HALT** with instructions to enable SB in BIOS
+- Install an `@reboot` cron handoff for automatic Stage 1 finalization
+- Reboot into setup mode and **HALT** with instructions to enable SB in BIOS
 
 **Stage 1 (Post-Secure Boot enabled):**
-Runs automatically at boot (systemd unit: `sbh-stage1-finalize.service`) once Secure Boot is enabled, then:
+Runs automatically at boot via the `@reboot` cron handoff once Secure Boot is enabled, then:
 - Re-seals TPM2 to SB + UKI measurements (PCRs 7+11)
 - Updates LUKS auto-unlock
 - Cleans up backups
 - Verifies boot chain
+
+You can also start the process explicitly with:
+
+```bash
+sudo sbh-secureboot --install
+```
+This enters setup mode, installs the cron handoff, and reboots when Stage 0 finishes.
 
 ### Custom Kernel Build
 
@@ -156,6 +163,9 @@ hexdump -Cv /sys/firmware/efi/efivars/SecureBoot-* 2>/dev/null
 
 # Force stage manually
 STAGE=1 sbh-secureboot
+
+# Enter setup mode and reboot into the automatic handoff
+sudo sbh-secureboot --install
 ```
 
 ### TPM2 resealing issues

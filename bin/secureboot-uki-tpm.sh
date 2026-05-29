@@ -13,6 +13,8 @@ umask 077
 #
 # Usage:
 #   sudo sbh-secureboot           # Auto-detect stage and run
+#   sudo sbh-secureboot --install # Stage 0 + cron handoff + reboot
+#   sudo sbh-secureboot --auto-reboot-check # Cron entry for first boot after reboot
 #   sudo STAGE=0 sbh-secureboot   # Force stage 0
 #   sudo STAGE=1 sbh-secureboot   # Force stage 1
 
@@ -32,7 +34,7 @@ EFI_MOUNT="${EFI_MOUNT:-/efi}"
 SYSCTL_HARDEN="/etc/sysctl.d/99-bootchain-hardening.conf"
 AUDIT_RULES="/etc/audit/rules.d/99-bootchain-security.rules"
 EFI_GUARD_SERVICE="/etc/systemd/system/efi-guard-readonly.service"
-STAGE1_AUTORUN_SERVICE="/etc/systemd/system/sbh-stage1-finalize.service"
+CRON_MARKER="sbh-stage1-finalize"
 MKINITCPIO_PRESET="/etc/mkinitcpio.d/cachyos-uki.preset"
 UKI_BUILD_HOOK="/usr/local/libexec/mkinitcpio-build-sign-uki.sh"
 SCRIPT_PATH="$(readlink -f "$0")"
@@ -337,23 +339,19 @@ EOF
 }
 
 install_stage1_autorun(){
-  cat > "$STAGE1_AUTORUN_SERVICE" <<EOF
-[Unit]
-Description=Finalize Secure Boot TPM2 Stage 1 automatically
-After=multi-user.target
-ConditionPathExists=$STATE_FILE
+  req crontab
 
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/env STAGE=1 "$SCRIPT_PATH"
-StandardOutput=journal
-StandardError=journal
+  local tmp_cron
+  tmp_cron="$(mktemp)"
 
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable sbh-stage1-finalize.service >/dev/null 2>&1 || true
+  crontab -l 2>/dev/null | grep -vF "$CRON_MARKER" > "$tmp_cron" || true
+  printf '%s\n' \
+    "@reboot /usr/bin/env \"$SCRIPT_PATH\" --auto-reboot-check # $CRON_MARKER" \
+    >> "$tmp_cron"
+  crontab "$tmp_cron"
+  rm -f "$tmp_cron"
+
+  log "Installed @reboot cron handoff for Stage 1"
 }
 
 stage_0_presb(){
@@ -410,7 +408,7 @@ EOF
   install_stage1_autorun
 
   log "=== Stage 0 Complete ==="
-  log "Next: Reboot → Enable Secure Boot in BIOS"
+  log "Next: reboot, enable Secure Boot in BIOS, then boot back into the system"
   log "Stage 1 will run automatically on the first boot with Secure Boot enabled"
 }
 
@@ -438,14 +436,13 @@ stage_1_postsb(){
   log "Cleaning up backups"
   rm -rf -- "${SB_BACKUP:-}" "${LUKS_BACKUP:-}" || true
   rm -f -- "$STATE_FILE"
-  systemctl disable sbh-stage1-finalize.service >/dev/null 2>&1 || true
-  rm -f -- "$STAGE1_AUTORUN_SERVICE"
-  systemctl daemon-reload
+  remove_stage1_autorun
 
   log "=== Stage 1 Complete ==="
   log "✓ Secure Boot enabled and locked"
   log "✓ TPM2 resealed to SB measurements"
   log "✓ LUKS auto-unlock via TPM2 ready"
+  log "Everything works."
 }
 
 auto_detect_stage(){
@@ -456,8 +453,49 @@ auto_detect_stage(){
   echo "$STAGE"
 }
 
+remove_stage1_autorun(){
+  if has crontab; then
+    local tmp_cron
+    tmp_cron="$(mktemp)"
+    crontab -l 2>/dev/null | grep -vF "$CRON_MARKER" > "$tmp_cron" || true
+    crontab "$tmp_cron" 2>/dev/null || true
+    rm -f "$tmp_cron"
+  fi
+}
+
+auto_reboot_check(){
+  [ -f "$STATE_FILE" ] || {
+    log "No pending Secure Boot setup state found; exiting."
+    return 0
+  }
+
+  if [ "$(sb_state)" != "enabled" ]; then
+    log "Secure Boot is not enabled yet; leaving the reboot handoff in place."
+    log "Enable Secure Boot in firmware and reboot again to continue."
+    return 0
+  fi
+
+  log "Secure Boot enabled; continuing with Stage 1 finalization."
+  stage_1_postsb
+  remove_stage1_autorun
+}
+
 main(){
   [ "$(id -u)" -eq 0 ] || die "Run as root"
+
+  if [ "${1:-}" = "--auto-reboot-check" ]; then
+    auto_reboot_check
+    return 0
+  fi
+
+  if [ "${1:-}" = "--install" ]; then
+    shift
+    STAGE=0
+    stage_0_presb
+    log "Rebooting into setup mode. Stage 1 will finish automatically after Secure Boot is enabled."
+    reboot
+    return 0
+  fi
 
   STAGE="${STAGE:-}"
   if [ -z "$STAGE" ]; then
