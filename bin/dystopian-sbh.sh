@@ -27,40 +27,37 @@ DRY_RUN=0
 set +E
 
 usage() {
-	cat <<-EOF
-		${BLUE}=== Dystopian Secure Boot Hardening ===${NC}
-		
-		${GREEN}USAGE${NC}
-		  $PROG_NAME [OPTION] [COMMAND]
-		
-		${GREEN}OPTIONS${NC}
-		  -h, --help              Show this help message
-		  -v, --verbose           Verbose output (detailed logs)
-		  -n, --dry-run           Test mode (no system changes)
-		  -V, --version           Show version
-		
-		${GREEN}COMMANDS${NC}
-		  menu                    Interactive guided setup (default)
-		  stage-0                 Pre-Secure Boot setup
-		  stage-1                 Post-Secure Boot finalization
-		  cleanup                 Remove Secure Boot / MOK / sbctl artifacts
-		  status                  Check current Secure Boot / TPM2 / LUKS state
-		  verify                  Run 10-point verification checklist
-		  doc [TOPIC]             Show documentation paths
-		
-		${GREEN}EXAMPLES${NC}
-		  $PROG_NAME menu                    # Start interactive guided setup
-		  $PROG_NAME stage-0                 # Run pre-SB setup only
-		  $PROG_NAME -n stage-0              # Test mode (no changes)
-		  $PROG_NAME status                  # Check current state
-		  $PROG_NAME doc build               # Show BUILD-GUIDE.md path
-		
-		${GREEN}DOCUMENTATION${NC}
-		  For complete guides, see: /usr/share/doc/dystopian-sbh/doc/
-		  - NVIDIA-PASCAL-DRIVER-LOCK.md    (NVIDIA 580 lock guide)
-		  - BUILD-GUIDE.md                   (Secure Boot + UKI setup)
-		  - INSTALL.md                       (Installation & troubleshooting)
-	EOF
+	printf '%s=== Dystopian Secure Boot Hardening ===%s\n\n' "$BLUE" "$NC"
+	printf '%sUSAGE%s\n' "$GREEN" "$NC"
+	printf '  %s [OPTION] [COMMAND]\n\n' "$PROG_NAME"
+
+	printf '%sOPTIONS%s\n' "$GREEN" "$NC"
+	printf '  -h, --help              Show this help message\n'
+	printf '  -v, --verbose           Verbose output (detailed logs)\n'
+	printf '  -n, --dry-run           Test mode (no system changes)\n'
+	printf '  -V, --version           Show version\n\n'
+
+	printf '%sCOMMANDS%s\n' "$GREEN" "$NC"
+	printf '  menu                    Interactive guided setup (default)\n'
+	printf '  stage-0                 Pre-Secure Boot setup\n'
+	printf '  stage-1                 Post-Secure Boot finalization\n'
+	printf '  cleanup                 Remove Secure Boot / MOK / sbctl artifacts\n'
+	printf '  status                  Check current Secure Boot / TPM2 / LUKS state\n'
+	printf '  verify                  Run 10-point verification checklist\n'
+	printf '  doc [TOPIC]             Show documentation paths\n\n'
+
+	printf '%sEXAMPLES%s\n' "$GREEN" "$NC"
+	printf '  %s menu                    # Start interactive guided setup\n' "$PROG_NAME"
+	printf '  %s stage-0                 # Run pre-SB setup only\n' "$PROG_NAME"
+	printf '  %s -n stage-0              # Test mode (no changes)\n' "$PROG_NAME"
+	printf '  %s status                  # Check current state\n' "$PROG_NAME"
+	printf '  %s doc build               # Show BUILD-GUIDE.md path\n\n' "$PROG_NAME"
+
+	printf '%sDOCUMENTATION%s\n' "$GREEN" "$NC"
+	printf '  For complete guides, see: /usr/share/doc/dystopian-sbh/doc/\n'
+	printf '  - NVIDIA-PASCAL-DRIVER-LOCK.md    (NVIDIA 580 lock guide)\n'
+	printf '  - BUILD-GUIDE.md                   (Secure Boot + UKI setup)\n'
+	printf '  - INSTALL.md                       (Installation & troubleshooting)\n'
 }
 
 version() {
@@ -519,23 +516,18 @@ cmd_menu() {
 	
 	while true; do
 		clear
-		cat <<-EOF
-			${BLUE}╔════════════════════════════════════════════╗${NC}
-			${BLUE}║  Dystopian Secure Boot Hardening Wizard   ║${NC}
-			${BLUE}╚════════════════════════════════════════════╝${NC}
-			
-			Current stage: ${YELLOW}$current_stage${NC}
-			
-			${GREEN}Select an option:${NC}
-			  1) Check system status
-			  2) View documentation
-			  3) Run Stage 0 (Pre-SB setup)
-			  4) Run Stage 1 (Post-SB finalization)
-			  5) Run verification checklist
-			  6) Cleanup Secure Boot artifacts
-			  7) Exit
-			
-		EOF
+		printf '%s╔════════════════════════════════════════════╗%s\n' "$BLUE" "$NC"
+		printf '%s║  Dystopian Secure Boot Hardening Wizard   ║%s\n' "$BLUE" "$NC"
+		printf '%s╚════════════════════════════════════════════╝%s\n\n' "$BLUE" "$NC"
+		printf 'Current stage: %s%s%s\n\n' "$YELLOW" "$current_stage" "$NC"
+		printf '%sSelect an option:%s\n' "$GREEN" "$NC"
+		printf '  1) Check system status\n'
+		printf '  2) View documentation\n'
+		printf '  3) Run Stage 0 (Pre-SB setup)\n'
+		printf '  4) Run Stage 1 (Post-SB finalization)\n'
+		printf '  5) Run verification checklist\n'
+		printf '  6) Cleanup Secure Boot artifacts\n'
+		printf '  7) Exit\n\n'
 		
 		read -p "Enter choice [1-7]: " choice
 		

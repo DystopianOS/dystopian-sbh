@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS=(
   "bin/build-from-scratch.sh"
+  "bin/dystopian-sbh.sh"
   "bin/enroll-mok.sh"
   "bin/generate-cachyos-env.sh"
   "bin/hw-detect-optimize.sh"
