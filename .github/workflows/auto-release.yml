@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: "update-tag-and-release"
+  group: "update-tag-and-release-${{ github.event_name }}-${{ github.ref }}"
   cancel-in-progress: true
 
 jobs:
