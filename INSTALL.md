@@ -14,10 +14,37 @@ Config files in `~/Projects/sbh/config/`:
 Documentation in `~/Projects/sbh/doc/`:
 - BUILD-GUIDE.md (complete walkthrough)
 
-## Installation to sbin (Requires sudo)
+## Installation via Pacman Package
 
 ```bash
-# Install executables
+# Build the package (if not already built)
+cd ~/Projects/Dystopian/Dystopian-PKGBUILDS/dystopian-sbh
+makepkg -f
+
+# Install the built package
+sudo pacman -U dystopian-sbh-1.0.0-1-x86_64.pkg.tar.zst --noconfirm
+
+# Verify installation
+which dystopian-sbh
+dystopian-sbh --help 2>/dev/null || echo "Script installed, no --help defined"
+ls -la /usr/bin/dystopian-sbh*
+```
+
+**Installation paths (via pacman):**
+- Main orchestrator: `/usr/bin/dystopian-sbh`
+- Build helper: `/usr/bin/dystopian-sbh-build`
+- Env generator: `/usr/bin/dystopian-sbh-gen-env`
+- Hardware detection: `/usr/bin/dystopian-sbh-hw-detect`
+- Secure Boot + UKI: `/usr/bin/dystopian-sbh-secureboot-uki`
+- Debug stripper: `/usr/bin/dystopian-sbh-strip-debug`
+- Config & docs: `/usr/share/dystopian-sbh/` and `/usr/share/doc/dystopian-sbh/`
+
+## Manual Installation (Legacy)
+
+For development or custom installation without pacman:
+
+```bash
+# Install executables manually
 sudo install -Dm755 ~/Projects/sbh/bin/secureboot-uki-tpm.sh /usr/local/sbin/sbh-secureboot
 sudo install -Dm755 ~/Projects/sbh/bin/build-from-scratch.sh /usr/local/sbin/sbh-build
 
