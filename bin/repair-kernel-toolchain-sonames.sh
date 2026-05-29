@@ -36,6 +36,21 @@ missing_sonames_for() {
     | sort -u
 }
 
+runtime_linking_error_for() {
+  local binary="$1"
+  local output
+
+  if output="$("$binary" --help 2>&1 >/dev/null)"; then
+    return 1
+  fi
+
+  if grep -Eq 'error while loading shared libraries|version `[^`]+` not found' <<<"$output"; then
+    return 0
+  fi
+
+  return 1
+}
+
 pick_compat_target() {
   local missing="$1"
   local stem candidates=()
@@ -72,9 +87,34 @@ repair_missing_soname() {
   log "Linked $compat -> $(basename "$target")"
 }
 
+rebuild_objtool_binary() {
+  local binary="$1"
+  local tool_dir
+
+  if [[ "$(basename "$binary")" != "objtool" ]]; then
+    return 1
+  fi
+
+  tool_dir="$(dirname "$binary")"
+  if [[ ! -f "$tool_dir/Makefile" ]]; then
+    warn "Cannot rebuild $binary (missing $tool_dir/Makefile)"
+    return 1
+  fi
+
+  log "Rebuilding stale $binary"
+  if make -C "$tool_dir" objtool >/dev/null; then
+    log "Rebuilt $binary successfully"
+    return 0
+  fi
+
+  warn "Failed to rebuild $binary"
+  return 1
+}
+
 verify_tools() {
   local binary missing
   local unresolved=0
+  local runtime_repaired=0
 
   while IFS= read -r binary; do
     [[ -n "$binary" ]] || continue
@@ -88,8 +128,28 @@ verify_tools() {
     done < <(missing_sonames_for "$binary")
   done < <(discover_kernel_tools)
 
+  if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig
+  fi
+
+  while IFS= read -r binary; do
+    [[ -n "$binary" ]] || continue
+    if runtime_linking_error_for "$binary"; then
+      unresolved=1
+      if rebuild_objtool_binary "$binary"; then
+        runtime_repaired=1
+      fi
+    fi
+  done < <(discover_kernel_tools)
+
+  if [[ $runtime_repaired -eq 1 ]] && command -v ldconfig >/dev/null 2>&1; then
+    ldconfig
+  fi
+
   if [[ $unresolved -eq 0 ]]; then
     log "No missing kernel tool SONAMEs detected"
+  else
+    log "Kernel tool dependency repair attempted; run script again to verify clean state"
   fi
 }
 
@@ -101,10 +161,6 @@ main() {
   fi
 
   verify_tools
-
-  if command -v ldconfig >/dev/null 2>&1; then
-    ldconfig
-  fi
 }
 
 main "$@"
