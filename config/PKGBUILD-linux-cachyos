@@ -177,10 +177,14 @@ _package-docs() {
   chmod -Rc u=rwX,go=rX "$pkgdir"
 }
 
-pkgname=("${pkgname[@]}")
-for _p in "${pkgname[@]}"; do
-  eval "package_$_p() {
-    $(declare -f _package_${_p#linux-cachyos})/
-    _package_${_p#linux-cachyos}
-  }"
-done
+package_linux-cachyos() {
+  _package
+}
+
+package_linux-cachyos-headers() {
+  _package-headers
+}
+
+package_linux-cachyos-docs() {
+  _package-docs
+}

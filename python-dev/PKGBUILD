@@ -20,9 +20,8 @@ makedepends=(
     'python-setuptools'
     'python-build'
 )
-source=()
-md5sums=()
-install=${pkgname}.install
+sha256sums=()
+
 
 # Use local files from the project
 _projdir="/home/daen/Projects/sbh/python-dev"
