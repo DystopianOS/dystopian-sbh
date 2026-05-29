@@ -19,10 +19,21 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app_token
+        if: ${{ secrets.DYSTOPIANBOT_APP_ID != '' && secrets.DYSTOPIANBOT_KEY != '' }}
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Resolve auth token
+        id: auth_token
+        shell: bash
+        run: |
+          if [ -n "${{ steps.app_token.outputs.token }}" ]; then
+            echo "token=${{ steps.app_token.outputs.token }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -33,7 +44,7 @@ jobs:
         id: tag_latest
         uses: DCx7C5/actions/tag-get-latest@v1
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.auth_token.outputs.token }}
 
       - name: Calculate next tag
         id: next_tag
@@ -113,7 +124,7 @@ jobs:
           configure-git: "true"
           initialize-home: "true"
           preset-passphrase-cache: "true"
-          gh-token: ${{ steps.app_token.outputs.token }}
+          gh-token: ${{ steps.auth_token.outputs.token }}
 
       - name: Bump script version
         if: steps.next_tag.outputs.tag != ''
@@ -136,14 +147,14 @@ jobs:
         if: steps.next_tag.outputs.tag != '' && steps.commit.outputs.committed == 'true'
         uses: DCx7C5/actions/git-push-changes@v1
         with:
-          gh-token: ${{ steps.app_token.outputs.token }}
+          gh-token: ${{ steps.auth_token.outputs.token }}
 
       - name: Create and push new tag
         if: steps.next_tag.outputs.tag != ''
         id: tag_create
         uses: DCx7C5/actions/tag-create-and-push@v1
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.auth_token.outputs.token }}
         with:
           sign: "true"
           version: ${{ steps.next_tag.outputs.tag }}
@@ -165,7 +176,7 @@ jobs:
           fail-if-exists: "false"
           prerelease: "false"
           draft: "false"
-          gh-token: ${{ steps.app_token.outputs.token || env.GH_TOKEN || github.token }}
+          gh-token: ${{ steps.auth_token.outputs.token }}
 
       - name: Cleanup GPG keys from runner
         if: steps.next_tag.outputs.tag != '' && steps.gpg_import.outputs.gpg_home != ''
