@@ -138,6 +138,13 @@ sbh/
 
 ---
 
+## Packaging Repo Notes
+
+- In PKGBUILD repositories, `PKGBUILD` and `.SRCINFO` are expected package metadata files.
+- Do not treat them as dirty-tree noise during cleanup or sync checks.
+
+---
+
 ## Common Tasks
 
 ### Lock NVIDIA Driver 580
