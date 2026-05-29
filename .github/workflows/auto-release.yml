@@ -177,6 +177,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${TAG_NAME}"
+          git fetch --tags --force
 
           if git ls-remote --tags --exit-code origin "refs/tags/${tag}" >/dev/null 2>&1; then
             echo "::notice::Remote tag ${tag} already exists; reusing it."
@@ -231,7 +232,7 @@ jobs:
           gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
 
       - name: Notify on success
-        if: success() && steps.next_tag.outputs.tag != '' && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHANNEL_ID != ''
+        if: success() && steps.next_tag.outputs.tag != '' && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHANNEL_ID != '' && contains(secrets.TELEGRAM_BOT_TOKEN, ':')
         uses: DCx7C5/actions/tg-notify-release@v1
         with:
           tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
