@@ -119,21 +119,16 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Detect GPG signing availability
+      - name: Validate required signing secrets
         if: steps.next_tag.outputs.tag != ''
-        id: gpg_ready
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "${{ secrets.GPG_PRIVATE_KEY }}" && -n "${{ secrets.GPG_PASSPHRASE }}" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::GPG_PRIVATE_KEY/GPG_PASSPHRASE not set; continuing without signed tags."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
+          [[ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]] || { echo "::error::GPG_PRIVATE_KEY is required"; exit 1; }
+          [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]] || { echo "::error::GPG_PASSPHRASE is required"; exit 1; }
 
       - name: Import GPG key
-        if: steps.next_tag.outputs.tag != '' && steps.gpg_ready.outputs.enabled == 'true'
+        if: steps.next_tag.outputs.tag != ''
         id: gpg_import
         uses: DCx7C5/actions/gpg-import@v1
         with:
@@ -162,6 +157,10 @@ jobs:
         with:
           message: "chore(release): bump version to ${{ steps.next_tag.outputs.tag }} [skip release]"
           skip-if-no-changes: "true"
+          gpg-sign: "true"
+          gpg-key-id: ${{ steps.gpg_import.outputs.fingerprint }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          pre-cached-pass: "true"
 
       - name: Push bump commit
         if: steps.next_tag.outputs.tag != '' && steps.commit.outputs.committed == 'true'
@@ -169,57 +168,35 @@ jobs:
         with:
           gh-token: ${{ steps.auth_token.outputs.token }}
 
-      - name: Configure Git identity for tagging
-        if: steps.next_tag.outputs.tag != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
-
       - name: Create and push new tag
         if: steps.next_tag.outputs.tag != ''
         id: tag_create
+        uses: DCx7C5/actions/tag-create-and-push@v1
+        with:
+          sign: "true"
+          fingerprint: ${{ steps.gpg_import.outputs.fingerprint }}
+          version: ${{ steps.next_tag.outputs.tag }}
+          commit-msg: "Release ${{ steps.next_tag.outputs.tag }}"
+          pass: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
+
+      - name: Build signed release assets
+        if: steps.next_tag.outputs.tag != ''
+        id: release_assets
         shell: bash
         env:
-          TAG_NAME: ${{ steps.next_tag.outputs.tag }}
-          GPG_ENABLED: ${{ steps.gpg_ready.outputs.enabled }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GPG_HOME: ${{ steps.gpg_import.outputs.gpg_home }}
+          RELEASE_TAG: ${{ steps.tag_create.outputs.tag_name || steps.next_tag.outputs.tag }}
+          GNUPGHOME: ${{ steps.gpg_import.outputs.gpg_home }}
         run: |
           set -euo pipefail
-          tag="${TAG_NAME}"
-          git fetch --tags --force
-
-          if git ls-remote --tags --exit-code origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "::notice::Remote tag ${tag} already exists; reusing it."
-            echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
-            echo "::notice::Tag ${tag} already exists; reusing it."
-            echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "${GPG_ENABLED}" == "true" ]]; then
-            export GNUPGHOME="${GPG_HOME}"
-            git tag -s "${tag}" -m "Release ${tag}" --force
-          else
-            git tag -a "${tag}" -m "Release ${tag}" --force
-          fi
-
-          if git push origin "refs/tags/${tag}"; then
-            :
-          elif git ls-remote --tags --exit-code origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "::notice::Remote tag ${tag} exists after push attempt; treating as success."
-          else
-            echo "::error::Failed to push tag ${tag}" >&2
-            exit 1
-          fi
-
-          echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          base="dist/dystopian-sbh-${RELEASE_TAG}"
+          tar_gz="${base}.tar.gz"
+          sig="${tar_gz}.sig"
+          git archive --format=tar.gz --output "$tar_gz" "$RELEASE_TAG"
+          gpg --batch --yes --detach-sign --output "$sig" "$tar_gz"
+          echo "tar_gz=$tar_gz" >> "$GITHUB_OUTPUT"
+          echo "sig=$sig" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
         if: steps.next_tag.outputs.tag != ''
@@ -235,6 +212,9 @@ jobs:
           fail-if-exists: "false"
           prerelease: "false"
           draft: "false"
+          assets: |
+            ${{ steps.release_assets.outputs.tar_gz }}
+            ${{ steps.release_assets.outputs.sig }}
           gh-token: ${{ steps.auth_token.outputs.token }}
 
       - name: Cleanup GPG keys from runner
