@@ -154,6 +154,14 @@ jobs:
         with:
           gh-token: ${{ steps.auth_token.outputs.token }}
 
+      - name: Configure Git identity for tagging
+        if: steps.next_tag.outputs.tag != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
       - name: Create and push new tag
         if: steps.next_tag.outputs.tag != ''
         id: tag_create
