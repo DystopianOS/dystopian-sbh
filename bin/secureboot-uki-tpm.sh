@@ -28,8 +28,8 @@ ENABLE_AUDIT="${ENABLE_AUDIT:-1}"
 # MODULE_SIGN_KEY="${MODULE_SIGN_KEY:-/var/lib/sbctl/keys/db/db.key}"
 # MODULE_SIGN_CERT="${MODULE_SIGN_CERT:-/var/lib/sbctl/keys/db/db.pem}"
 
-STATE_DIR="/var/lib/secureboot-uki-tpm"
-STATE_FILE="${STATE_DIR}/state.env"
+STATE_DIR="${STATE_DIR:-/var/lib/secureboot-uki-tpm}"
+STATE_FILE="${STATE_FILE:-${STATE_DIR}/state.env}"
 EFI_MOUNT="${EFI_MOUNT:-/efi}"
 SYSCTL_HARDEN="/etc/sysctl.d/99-bootchain-hardening.conf"
 AUDIT_RULES="/etc/audit/rules.d/99-bootchain-security.rules"
@@ -37,7 +37,7 @@ EFI_GUARD_SERVICE="/etc/systemd/system/efi-guard-readonly.service"
 CRON_MARKER="sbh-stage1-finalize"
 MKINITCPIO_PRESET="/etc/mkinitcpio.d/cachyos-uki.preset"
 UKI_BUILD_HOOK="/usr/local/libexec/mkinitcpio-build-sign-uki.sh"
-SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_PATH="${SCRIPT_PATH:-$(readlink -f "${BASH_SOURCE[0]}")}"
 
 log(){ printf '[*] %s\n' "$*"; }
 warn(){ printf '[!] %s\n' "$*"; }
@@ -512,4 +512,6 @@ main(){
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

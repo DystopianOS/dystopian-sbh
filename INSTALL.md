@@ -58,6 +58,7 @@ Runs automatically at boot via the `@reboot` cron handoff once Secure Boot is en
 - Updates LUKS auto-unlock
 - Cleans up backups
 - Verifies boot chain
+- Removes the cron handoff after successful completion
 
 You can also start the process explicitly with:
 
