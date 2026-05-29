@@ -10,7 +10,7 @@ arch=('x86_64')
 license=('MIT')
 url="https://github.com/DystopianOS/${pkgname}"
 groups=('dystopian')
-source=("git+https://github.com/DystopianOS/dystopian-sbh#tag=$pkgver")
+source=("git+https://github.com/DystopianOS/dystopian-sbh#branch=main")
 makedepends=('git')
 depends=('bash' 'efibootmgr' 'grub' 'systemd')
 optdepends=(
@@ -31,7 +31,7 @@ validpgpkeys=(
 )
 
 package() {
-  cd "$pkgname"
+  cd "$srcdir/$pkgname"
 
   # Install main orchestrator binary to /sbin/
   install -Dm755 bin/dystopian-sbh.sh "$pkgdir/sbin/dystopian-sbh"
