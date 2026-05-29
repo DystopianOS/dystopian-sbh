@@ -104,8 +104,21 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Import GPG key
+      - name: Detect GPG signing availability
         if: steps.next_tag.outputs.tag != ''
+        id: gpg_ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ secrets.GPG_PRIVATE_KEY }}" && -n "${{ secrets.GPG_PASSPHRASE }}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::GPG_PRIVATE_KEY/GPG_PASSPHRASE not set; continuing without signed tags."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import GPG key
+        if: steps.next_tag.outputs.tag != '' && steps.gpg_ready.outputs.enabled == 'true'
         id: gpg_import
         uses: DCx7C5/actions/gpg-import@v1
         with:
@@ -148,11 +161,11 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.auth_token.outputs.token }}
         with:
-          sign: "true"
+          sign: ${{ steps.gpg_ready.outputs.enabled }}
           version: ${{ steps.next_tag.outputs.tag }}
           commit-msg: "Release ${{ steps.next_tag.outputs.tag }}"
-          pass: ${{ secrets.GPG_PASSPHRASE }}
-          gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
+          pass: ${{ steps.gpg_ready.outputs.enabled == 'true' && secrets.GPG_PASSPHRASE || '' }}
+          gpg-home: ${{ steps.gpg_ready.outputs.enabled == 'true' && steps.gpg_import.outputs.gpg_home || '' }}
 
       - name: Create GitHub release
         if: steps.next_tag.outputs.tag != ''
