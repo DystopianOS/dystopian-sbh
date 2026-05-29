@@ -1,37 +1,47 @@
-name: Auto version and release
+name: "Update Repository Tag & Release"
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-jobs:
-  release:
-    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip release]')
-    runs-on: ubuntu-latest
+concurrency:
+  group: "update-tag-and-release"
+  cancel-in-progress: true
 
+jobs:
+  update-tag-and-release:
+    runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Get latest release tag
-        id: latest_tag
+      - name: Get latest tag
+        id: tag_latest
         uses: DCx7C5/actions/tag-get-latest@v1
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
 
-      - name: Calculate next version
-        id: version
+      - name: Calculate next tag
+        id: next_tag
         shell: bash
         run: |
           set -euo pipefail
 
-          latest="${{ steps.latest_tag.outputs.tag_name }}"
+          latest="${{ steps.tag_latest.outputs.tag_name }}"
           if [[ -z "$latest" || "$latest" == "null" ]]; then
             latest="v0.0.0"
             range=""
@@ -39,15 +49,21 @@ jobs:
             range="${latest}..HEAD"
           fi
 
+          if [[ -n "$range" ]] && [[ -z "$(git rev-list "$range")" ]]; then
+            echo "No commits since latest tag; nothing to release."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           core="${latest#v}"
           IFS='.' read -r major minor patch <<< "$core"
 
           if [[ -n "$range" ]]; then
             commit_text="$(git log --format='%s%n%b' "$range")"
-            release_notes="$(git log --format='- %h %s (%an)' "$range")"
+            release_notes="$(git log --format='- %h %s (%an)' "$range" | cat)"
           else
             commit_text="$(git log --format='%s%n%b')"
-            release_notes="$(git log --format='- %h %s (%an)')"
+            release_notes="$(git log --format='- %h %s (%an)' | cat)"
           fi
 
           bump="patch"
@@ -72,56 +88,97 @@ jobs:
               ;;
           esac
 
-          new_version="${major}.${minor}.${patch}"
-          new_tag="v${new_version}"
+          new_tag="v${major}.${minor}.${patch}"
 
           if [[ -z "$release_notes" ]]; then
             release_notes="- No user-facing changes recorded."
           fi
 
-          echo "latest_tag=${latest}" >> "$GITHUB_OUTPUT"
-          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
-          echo "new_tag=${new_tag}" >> "$GITHUB_OUTPUT"
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
           {
             echo "release_notes<<EOF"
             echo "$release_notes"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Import GPG key
+        if: steps.next_tag.outputs.tag != ''
+        id: gpg_import
+        uses: DCx7C5/actions/gpg-import@v1
+        with:
+          import-method: "inline"
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete-after-import: "true"
+          configure-git: "true"
+          initialize-home: "true"
+          preset-passphrase-cache: "true"
+          gh-token: ${{ steps.app_token.outputs.token }}
+
       - name: Bump script version
+        if: steps.next_tag.outputs.tag != ''
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/^readonly PROG_VERSION="[0-9]+\.[0-9]+\.[0-9]+"/readonly PROG_VERSION="${{ steps.version.outputs.new_version }}"/' bin/dystopian-sbh.sh
-
-      - name: Stage version bump
-        shell: bash
-        run: git add bin/dystopian-sbh.sh
+          new_version="${{ steps.next_tag.outputs.tag }}"
+          new_version="${new_version#v}"
+          sed -i -E "s/^readonly PROG_VERSION=\"[0-9]+\.[0-9]+\.[0-9]+\"/readonly PROG_VERSION=\"${new_version}\"/" bin/dystopian-sbh.sh
 
       - name: Commit version bump
+        if: steps.next_tag.outputs.tag != ''
         id: commit
         uses: DCx7C5/actions/git-commit@v1
         with:
-          message: "chore(release): bump version to ${{ steps.version.outputs.new_tag }} [skip release]"
+          message: "chore(release): bump version to ${{ steps.next_tag.outputs.tag }} [skip release]"
           skip-if-no-changes: "true"
 
       - name: Push bump commit
-        if: steps.commit.outputs.committed == 'true'
+        if: steps.next_tag.outputs.tag != '' && steps.commit.outputs.committed == 'true'
         uses: DCx7C5/actions/git-push-changes@v1
         with:
-          gh-token: ${{ github.token }}
+          gh-token: ${{ steps.app_token.outputs.token }}
 
-      - name: Create and push release tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
-          git push origin "${{ steps.version.outputs.new_tag }}"
+      - name: Create and push new tag
+        if: steps.next_tag.outputs.tag != ''
+        id: tag_create
+        uses: DCx7C5/actions/tag-create-and-push@v1
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        with:
+          sign: "true"
+          version: ${{ steps.next_tag.outputs.tag }}
+          commit-msg: "Release ${{ steps.next_tag.outputs.tag }}"
+          pass: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
 
       - name: Create GitHub release
+        if: steps.next_tag.outputs.tag != ''
+        id: release_create
         uses: DCx7C5/actions/gh-create-release@v1
+        env:
+          GNUPGHOME: ${{ steps.gpg_import.outputs.gpg_home }}
         with:
-          release-tag: ${{ steps.version.outputs.new_tag }}
-          release-name: ${{ steps.version.outputs.new_tag }}
-          release-body: ${{ steps.version.outputs.release_notes }}
-          gh-token: ${{ github.token }}
+          release-tag: ${{ steps.tag_create.outputs.tag_name || steps.next_tag.outputs.tag }}
+          release-name: ${{ steps.tag_create.outputs.tag_name || steps.next_tag.outputs.tag }}
+          release-body: ${{ steps.next_tag.outputs.release_notes }}
+          generate-notes: "false"
+          fail-if-exists: "false"
+          prerelease: "false"
+          draft: "false"
+          gh-token: ${{ steps.app_token.outputs.token || env.GH_TOKEN || github.token }}
+
+      - name: Cleanup GPG keys from runner
+        if: steps.next_tag.outputs.tag != '' && steps.gpg_import.outputs.gpg_home != ''
+        uses: DCx7C5/actions/gpg-cleanup@v1
+        with:
+          gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
+
+      - name: Notify on success
+        if: success() && steps.next_tag.outputs.tag != ''
+        uses: DCx7C5/actions/tg-notify-release@v1
+        with:
+          tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          fingerprint: ${{ steps.gpg_import.outputs.fingerprint }}
+          tag-name: ${{ steps.tag_create.outputs.tag_name || steps.next_tag.outputs.tag }}
+          release-name: ${{ steps.tag_create.outputs.tag_name || steps.next_tag.outputs.tag }}
