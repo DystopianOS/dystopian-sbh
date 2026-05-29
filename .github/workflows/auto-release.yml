@@ -34,60 +34,64 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.auth_token.outputs.token }}
 
+      - name: Detect release window
+        id: release_window
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest="${{ steps.tag_latest.outputs.tag_name }}"
+          if [[ -z "$latest" || "$latest" == "null" ]]; then
+            echo "has_commits=true" >> "$GITHUB_OUTPUT"
+            echo "range=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$(git rev-list --count "${latest}..HEAD")" -eq 0 ]]; then
+            echo "No commits since latest tag; nothing to release."
+            echo "has_commits=false" >> "$GITHUB_OUTPUT"
+            echo "range=${latest}..HEAD" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_commits=true" >> "$GITHUB_OUTPUT"
+          echo "range=${latest}..HEAD" >> "$GITHUB_OUTPUT"
+
       - name: Calculate next tag
+        if: steps.release_window.outputs.has_commits == 'true'
+        id: semver
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          search_commit_body: "true"
+          bump_each_commit: "false"
+          major_pattern: "BREAKING CHANGE|^[^\\s]+(\\(.+\\))?!:"
+          major_regexp: "true"
+          minor_pattern: "^feat(\\(.+\\))?:"
+          minor_regexp: "true"
+          version_format: "${major}.${minor}.${patch}"
+
+      - name: Prepare tag and release notes
         id: next_tag
         shell: bash
         run: |
           set -euo pipefail
 
-          latest="${{ steps.tag_latest.outputs.tag_name }}"
-          if [[ -z "$latest" || "$latest" == "null" ]]; then
-            latest="v0.0.0"
-            range=""
-          else
-            range="${latest}..HEAD"
-          fi
-
-          if [[ -n "$range" ]] && [[ -z "$(git rev-list "$range")" ]]; then
-            echo "No commits since latest tag; nothing to release."
+          if [[ "${{ steps.release_window.outputs.has_commits }}" != "true" ]]; then
             echo "tag=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          core="${latest#v}"
-          IFS='.' read -r major minor patch <<< "$core"
+          new_tag="${{ steps.semver.outputs.version_tag }}"
+          if [[ -z "$new_tag" ]]; then
+            new_tag="v${{ steps.semver.outputs.version }}"
+          fi
 
+          range="${{ steps.release_window.outputs.range }}"
           if [[ -n "$range" ]]; then
-            commit_text="$(git log --format='%s%n%b' "$range")"
             release_notes="$(git log --format='- %h %s (%an)' "$range" | cat)"
           else
-            commit_text="$(git log --format='%s%n%b')"
             release_notes="$(git log --format='- %h %s (%an)' | cat)"
           fi
-
-          bump="patch"
-          if grep -Eq 'BREAKING CHANGE|^[^ ]+!:' <<< "$commit_text"; then
-            bump="major"
-          elif grep -Eq '^feat(\(|:)' <<< "$commit_text"; then
-            bump="minor"
-          fi
-
-          case "$bump" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              patch=$((patch + 1))
-              ;;
-          esac
-
-          new_tag="v${major}.${minor}.${patch}"
 
           if [[ -z "$release_notes" ]]; then
             release_notes="- No user-facing changes recorded."
