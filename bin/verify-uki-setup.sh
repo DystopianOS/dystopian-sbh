@@ -43,9 +43,9 @@ echo ""
 
 # Check 4: UKI Generation Script
 echo "Check 4: UKI Generation Script"
-if [ -f /usr/local/bin/generate-uki.sh ]; then
+if [ -f /usr/lib/dystopian-sbh/generate-uki.sh ]; then
   echo "  ✓ UKI generation script installed"
-  if [ -x /usr/local/bin/generate-uki.sh ]; then
+  if [ -x /usr/lib/dystopian-sbh/generate-uki.sh ]; then
     echo "    Script is executable"
   fi
 else
@@ -53,8 +53,46 @@ else
 fi
 echo ""
 
-# Check 5: systemd-boot Entry
-echo "Check 5: systemd-boot Boot Entry"
+# Check 5: Kernel Toolchain SONAME Repair
+echo "Check 5: Kernel Toolchain SONAME Repair"
+if [ -f /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh ]; then
+  echo "  ✓ SONAME repair script installed"
+  if [ -x /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh ]; then
+    echo "    Script is executable"
+  fi
+else
+  echo "  ✗ SONAME repair script NOT found"
+fi
+
+if [ -f /usr/share/libalpm/hooks/98-dystopian-kernel-toolchain-sonames.hook ] || \
+   [ -f /etc/pacman.d/hooks/98-dystopian-kernel-toolchain-sonames.hook ]; then
+  echo "  ✓ SONAME repair hook installed"
+else
+  echo "  ✗ SONAME repair hook NOT found"
+fi
+echo ""
+
+# Check 6: Kernel Build Tool Dependencies
+echo "Check 6: Kernel Build Tool Dependencies"
+OBJTOOL_FOUND=0
+OBJTOOL_MISSING=0
+while IFS= read -r objtool; do
+  [ -n "$objtool" ] || continue
+  OBJTOOL_FOUND=1
+  if ldd "$objtool" 2>/dev/null | grep -q '=> not found'; then
+    echo "  ✗ Missing shared libraries for: $objtool"
+    OBJTOOL_MISSING=1
+  fi
+done < <(find /usr/lib/modules -path '*/build/tools/objtool/objtool' -type f 2>/dev/null | sort -u)
+if [ "$OBJTOOL_FOUND" -eq 0 ]; then
+  echo "  ⚠ objtool not found under installed kernel headers"
+elif [ "$OBJTOOL_MISSING" -eq 0 ]; then
+  echo "  ✓ objtool dependencies are resolved"
+fi
+echo ""
+
+# Check 7: systemd-boot Entry
+echo "Check 7: systemd-boot Boot Entry"
 if [ -f /efi/loader/entries/cachyos.conf ]; then
   echo "  ✓ systemd-boot entry configured"
   cat /efi/loader/entries/cachyos.conf | sed 's/^/    /'
@@ -63,8 +101,8 @@ else
 fi
 echo ""
 
-# Check 6: NVIDIA Driver Status
-echo "Check 6: NVIDIA Driver Status"
+# Check 8: NVIDIA Driver Status
+echo "Check 8: NVIDIA Driver Status"
 if command -v nvidia-smi &> /dev/null; then
   DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader)
   echo "  ✓ NVIDIA driver installed: $DRIVER_VER"
@@ -79,8 +117,8 @@ else
 fi
 echo ""
 
-# Check 7: CUDA Status
-echo "Check 7: CUDA Toolkit Status"
+# Check 9: CUDA Status
+echo "Check 9: CUDA Toolkit Status"
 if command -v nvcc &> /dev/null; then
   CUDA_VER=$(nvcc --version | grep "release" | awk '{print $5}')
   echo "  ✓ CUDA installed: $CUDA_VER"
@@ -95,8 +133,8 @@ else
 fi
 echo ""
 
-# Check 8: Kernel Command Line
-echo "Check 8: Kernel Command Line"
+# Check 10: Kernel Command Line
+echo "Check 10: Kernel Command Line"
 if grep -q "nvidia_drm.modeset=1" /proc/cmdline; then
   echo "  ✓ NVIDIA DRM modeset enabled"
 else
@@ -104,8 +142,8 @@ else
 fi
 echo ""
 
-# Check 9: Secure Boot Status
-echo "Check 9: Secure Boot & MOK Status"
+# Check 11: Secure Boot Status
+echo "Check 11: Secure Boot & MOK Status"
 if command -v mokutil &> /dev/null; then
   SB_STATE=$(mokutil --sb-state 2>/dev/null || echo "unknown")
   echo "  Secure Boot: $SB_STATE"
@@ -121,8 +159,8 @@ else
 fi
 echo ""
 
-# Check 10: IgnorePkg Configuration
-echo "Check 10: Package Lock (IgnorePkg)"
+# Check 12: IgnorePkg Configuration
+echo "Check 12: Package Lock (IgnorePkg)"
 if grep -q "IgnorePkg.*nvidia-580xx" /etc/pacman.conf; then
   echo "  ✓ nvidia-580xx packages locked in pacman.conf"
   grep "IgnorePkg" /etc/pacman.conf | sed 's/^/    /'

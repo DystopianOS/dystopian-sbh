@@ -131,6 +131,17 @@ source ~/Projects/sbh/config/cachyos-env/optimized-customized-hardened-nvidia-lk
 # Driver 580 will auto-build modules for new kernels via DKMS
 ```
 
+### Step 5: Automatic SONAME Repair Hook
+
+The package also ships a generic post-transaction hook that repairs stale SONAME
+links for kernel build tools when binutils or kernel headers are upgraded.
+This keeps `objtool` working if a compatible library version is present but the
+old SONAME was dropped.
+
+```bash
+sudo /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh
+```
+
 ---
 
 ## CUDA 12.x Ecosystem Setup
@@ -571,10 +582,11 @@ Target = nvidia-580xx-dkms
 [Action]
 Description = Generating Unified Kernel Image...
 When = PostTransaction
-Exec = /usr/local/bin/generate-uki.sh
+Exec = /usr/lib/dystopian-sbh/generate-uki.sh
+Exec = /usr/lib/dystopian-sbh/generate-uki.sh
 ```
 
-Create `/usr/local/bin/generate-uki.sh`:
+Create `/usr/lib/dystopian-sbh/generate-uki.sh`:
 
 ```bash
 #!/bin/bash
@@ -627,7 +639,7 @@ echo "✓ UKI ready for boot"
 
 Make it executable:
 ```bash
-sudo chmod +x /usr/local/bin/generate-uki.sh
+sudo chmod +x /usr/lib/dystopian-sbh/generate-uki.sh
 ```
 
 ### Step 5: Enroll MOK in Secure Boot (First Time Only)
@@ -678,7 +690,7 @@ sudo dkms install nvidia/580 -k 7.0.10-zen1-1-zen
 sudo /etc/dkms/post-install.sh 7.0.10-zen1-1-zen
 
 # Regenerate UKI
-sudo /usr/local/bin/generate-uki.sh
+sudo /usr/lib/dystopian-sbh/generate-uki.sh
 
 # Verify
 sbverify /efi/EFI/Linux/cachyos-linux.efi
@@ -741,7 +753,7 @@ sudo dkms remove nvidia/580 --all
 sudo dkms install nvidia/580
 
 # Regenerate UKI manually
-sudo /usr/local/bin/generate-uki.sh
+sudo /usr/lib/dystopian-sbh/generate-uki.sh
 
 # Check systemd-boot
 bootctl status

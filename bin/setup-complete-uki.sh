@@ -12,6 +12,51 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+cleanup_setup_artifacts() {
+  local reset_mok="${1:-0}"
+  local removed=0
+
+  if [ "$reset_mok" = "1" ] && command -v mokutil >/dev/null 2>&1; then
+    mokutil --reset || true
+  fi
+
+  for path in \
+    /root/MOK.key \
+    /root/MOK.crt \
+    /root/MOK.der \
+    /etc/dkms/post-install.sh \
+    /etc/dkms/post-build.sh \
+    /etc/pacman.d/hooks/99-ukify-cachyos.hook \
+    /etc/pacman.d/hooks/98-dystopian-kernel-toolchain-sonames.hook \
+    /usr/lib/dystopian-sbh/generate-uki.sh \
+    /usr/lib/dystopian-sbh/mkinitcpio-build-sign-uki.sh \
+    /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh \
+    /usr/lib/dystopian-sbh/generate-uki.sh \
+    /efi/loader/entries/cachyos.conf \
+    /boot/loader/entries/cachyos.conf
+  do
+    if [ -e "$path" ] || [ -L "$path" ]; then
+      rm -rf -- "$path"
+      removed=$((removed + 1))
+    fi
+  done
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+
+  echo "✓ Cleanup removed $removed path(s)"
+}
+
+if [ "${1:-}" = "--cleanup" ]; then
+  cleanup_setup_artifacts 1
+  exit 0
+fi
+
+if [ "${SBH_SKIP_PREP_CLEANUP:-0}" != "1" ]; then
+  cleanup_setup_artifacts 0
+fi
+
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║  NVIDIA 580 + Secure Boot + UKI Complete Setup                 ║"
 echo "║  For CachyOS with GTX 1050 Ti (Pascal 6.1)                    ║"

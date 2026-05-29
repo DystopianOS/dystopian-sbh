@@ -176,7 +176,7 @@ sudo dkms install nvidia/580 -k 7.0.10-zen1-1-zen
 sudo /etc/dkms/post-install.sh 7.0.10-zen1-1-zen
 
 # Regenerate UKI
-sudo /usr/local/bin/generate-uki.sh
+sudo /usr/lib/dystopian-sbh/generate-uki.sh
 ```
 
 ---

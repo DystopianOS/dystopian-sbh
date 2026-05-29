@@ -1,0 +1,11 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = binutils
+Target = linux-*-headers
+
+[Action]
+Description = Repair kernel build-tool SONAME compatibility links
+When = PostTransaction
+Exec = /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh

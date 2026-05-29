@@ -36,7 +36,7 @@ AUDIT_RULES="/etc/audit/rules.d/99-bootchain-security.rules"
 EFI_GUARD_SERVICE="/etc/systemd/system/efi-guard-readonly.service"
 CRON_MARKER="sbh-stage1-finalize"
 MKINITCPIO_PRESET="/etc/mkinitcpio.d/cachyos-uki.preset"
-UKI_BUILD_HOOK="/usr/local/libexec/mkinitcpio-build-sign-uki.sh"
+UKI_BUILD_HOOK="/usr/lib/dystopian-sbh/mkinitcpio-build-sign-uki.sh"
 SCRIPT_PATH="${SCRIPT_PATH:-$(readlink -f "${BASH_SOURCE[0]}")}"
 
 log(){ printf '[*] %s\n' "$*"; }
@@ -274,7 +274,7 @@ EOF
 }
 
 install_mkinitcpio_hook(){
-  mkdir -p /usr/local/libexec
+  mkdir -p /usr/lib/dystopian-sbh
 
   cat > "$UKI_BUILD_HOOK" <<'EOF'
 #!/usr/bin/env bash

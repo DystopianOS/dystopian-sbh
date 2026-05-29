@@ -7,6 +7,7 @@ readonly PROG_NAME="dystopian-sbh"
 readonly PROG_VERSION="1.0.0"
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(dirname "$PROG_DIR")"
+readonly HELPER_DIR="${SBH_HELPER_DIR:-/usr/lib/dystopian-sbh}"
 readonly DOC_DIR="${DOC_DIR:-/usr/share/doc/dystopian-sbh/doc}"
 readonly LOCAL_DOC_DIR="${REPO_ROOT}/doc"
 
@@ -42,6 +43,7 @@ usage() {
 		  menu                    Interactive guided setup (default)
 		  stage-0                 Pre-Secure Boot setup
 		  stage-1                 Post-Secure Boot finalization
+		  cleanup                 Remove Secure Boot / MOK / sbctl artifacts
 		  status                  Check current Secure Boot / TPM2 / LUKS state
 		  verify                  Run 10-point verification checklist
 		  doc [TOPIC]             Show documentation paths
@@ -79,6 +81,103 @@ log_error() {
 
 log_verbose() {
 	[[ $VERBOSE -eq 1 ]] && echo -e "${BLUE}[DEBUG]${NC} $*"
+}
+
+resolve_helper_script() {
+	local script="$1"
+	local candidate
+
+	for candidate in "$HELPER_DIR/$script" "$PROG_DIR/$script" "$REPO_ROOT/bin/$script"; do
+		if [[ -x "$candidate" ]]; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+remove_if_present() {
+	local path="$1"
+
+	if [[ -e "$path" || -L "$path" ]]; then
+		rm -rf -- "$path"
+	fi
+}
+
+cleanup_secureboot_artifacts() {
+	local mode="${1:-interactive}"
+	local reset_mok="${2:-0}"
+	local removed=0
+
+	if [[ $mode != "auto" ]]; then
+		echo
+		log_info "This will remove local Secure Boot setup artifacts, MOK keys, sbctl state, and related hooks."
+		echo "It will not uninstall packages."
+		if [[ $DRY_RUN -eq 0 ]]; then
+			read -p "Continue with cleanup? (yes/no): " -r confirm
+			if [[ ! "$confirm" =~ ^[yY][eE][sS]$ ]]; then
+				log_info "Cleanup cancelled"
+				return 0
+			fi
+		fi
+	fi
+
+	if [[ $DRY_RUN -eq 1 ]]; then
+		log_warn "DRY-RUN MODE: No changes will be made"
+		return 0
+	fi
+
+	if [[ "$reset_mok" == "1" ]] && command -v mokutil &>/dev/null; then
+		log_info "Requesting firmware-side MOK reset"
+		mokutil --reset || log_warn "mokutil reset request failed or was already queued"
+	fi
+
+	for path in \
+		/root/MOK.key \
+		/root/MOK.crt \
+		/root/MOK.der \
+		/root/luks-header-backup-* \
+		/var/lib/sbctl \
+		/var/lib/sbctl.backup-* \
+		/var/lib/secureboot-uki-tpm \
+		/etc/dkms/post-install.sh \
+		/etc/dkms/post-build.sh \
+		/etc/pacman.d/hooks/99-ukify-cachyos.hook \
+		/etc/pacman.d/hooks/98-dystopian-kernel-toolchain-sonames.hook \
+		/usr/lib/dystopian-sbh/generate-uki.sh \
+		/usr/local/libexec/mkinitcpio-build-sign-uki.sh \
+		/usr/lib/dystopian-sbh/mkinitcpio-build-sign-uki.sh \
+		/usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh \
+		/etc/kernel/cmdline.d/99-bootchain.conf \
+		/etc/sysctl.d/99-bootchain-hardening.conf \
+		/etc/audit/rules.d/99-bootchain-security.rules \
+		/etc/systemd/system/efi-guard-readonly.service \
+		/etc/mkinitcpio.d/cachyos-uki.preset \
+		/efi/loader/entries/cachyos.conf \
+		/boot/loader/entries/cachyos.conf
+	do
+		for expanded in $path; do
+			if [[ -e "$expanded" || -L "$expanded" ]]; then
+				remove_if_present "$expanded"
+				((removed++))
+			fi
+		done
+	done
+
+	if command -v systemctl &>/dev/null; then
+		systemctl daemon-reload >/dev/null 2>&1 || true
+	fi
+
+	if command -v crontab &>/dev/null; then
+		local tmp_cron
+		tmp_cron="$(mktemp)"
+		crontab -l 2>/dev/null | grep -vF "sbh-stage1-finalize" > "$tmp_cron" || true
+		crontab "$tmp_cron" 2>/dev/null || true
+		rm -f "$tmp_cron"
+	fi
+
+	log_info "Cleanup complete ($removed path(s) removed)"
 }
 
 check_root() {
@@ -339,13 +438,16 @@ cmd_stage_0() {
 		fi
 	fi
 	
-	local setup_script="$PROG_DIR/setup-complete-uki.sh"
-	if [[ -f "$setup_script" ]]; then
+	cleanup_secureboot_artifacts auto 0
+
+	local setup_script
+	setup_script="$(resolve_helper_script setup-complete-uki.sh)" || true
+	if [[ -n "${setup_script:-}" ]]; then
 		log_info "Running setup orchestration..."
 		if [[ $DRY_RUN -eq 1 ]]; then
 			bash -n "$setup_script" || log_error "Script validation failed"
 		else
-			bash "$setup_script"
+			SBH_SKIP_PREP_CLEANUP=1 bash "$setup_script"
 		fi
 	else
 		log_error "Setup script not found: $setup_script"
@@ -363,6 +465,11 @@ cmd_stage_0() {
 	echo
 	echo "After Stage 1 completes, run:"
 	echo "  $PROG_NAME verify"
+}
+
+cmd_cleanup() {
+	check_root
+	cleanup_secureboot_artifacts interactive 1
 }
 
 cmd_stage_1() {
@@ -425,11 +532,12 @@ cmd_menu() {
 			  3) Run Stage 0 (Pre-SB setup)
 			  4) Run Stage 1 (Post-SB finalization)
 			  5) Run verification checklist
-			  6) Exit
+			  6) Cleanup Secure Boot artifacts
+			  7) Exit
 			
 		EOF
 		
-		read -p "Enter choice [1-6]: " choice
+		read -p "Enter choice [1-7]: " choice
 		
 		case "$choice" in
 			1) cmd_status ;;
@@ -437,7 +545,8 @@ cmd_menu() {
 			3) cmd_stage_0 ;;
 			4) check_root; cmd_stage_1 ;;
 			5) check_root; cmd_verify ;;
-			6) log_info "Exiting"; exit 0 ;;
+			6) check_root; cmd_cleanup ;;
+			7) log_info "Exiting"; exit 0 ;;
 			*) log_error "Invalid choice. Try again." ;;
 		esac
 		
@@ -467,7 +576,7 @@ main() {
 				DRY_RUN=1
 				shift
 				;;
-			menu|stage-0|stage-1|status|verify|doc)
+			menu|stage-0|stage-1|cleanup|status|verify|doc)
 				cmd="$1"
 				shift
 				break
@@ -488,6 +597,7 @@ main() {
 		menu) cmd_menu ;;
 		stage-0) cmd_stage_0 "$@" ;;
 		stage-1) cmd_stage_1 "$@" ;;
+		cleanup) cmd_cleanup ;;
 		status) cmd_status ;;
 		verify) cmd_verify ;;
 		doc) cmd_doc "$@" ;;

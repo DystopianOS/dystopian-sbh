@@ -11,6 +11,11 @@ fi
 
 echo "=== Setting up UKI generation pacman hook ==="
 
+GENERATE_UKI_DIR="/usr/lib/dystopian-sbh"
+GENERATE_UKI_SCRIPT="${GENERATE_UKI_DIR}/generate-uki.sh"
+REPAIR_UKI_SCRIPT="${GENERATE_UKI_DIR}/repair-kernel-toolchain-sonames.sh"
+REPAIR_HOOK="/etc/pacman.d/hooks/98-dystopian-kernel-toolchain-sonames.hook"
+
 # Create pacman.d/hooks directory
 mkdir -p /etc/pacman.d/hooks
 
@@ -27,16 +32,36 @@ Target = nvidia-580xx-dkms
 [Action]
 Description = Generating Unified Kernel Image for NVIDIA 580...
 When = PostTransaction
-Exec = /usr/local/bin/generate-uki.sh
+Exec = ${GENERATE_UKI_SCRIPT}
 EOF
 
 echo "✓ Pacman hook created: /etc/pacman.d/hooks/99-ukify-cachyos.hook"
 
+if [ ! -f /usr/share/libalpm/hooks/98-dystopian-kernel-toolchain-sonames.hook ]; then
+  echo "Creating kernel toolchain SONAME repair hook..."
+  cat > "$REPAIR_HOOK" << 'EOF'
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = binutils
+Target = linux-*-headers
+
+[Action]
+Description = Repair kernel build-tool SONAME compatibility links
+When = PostTransaction
+Exec = /usr/lib/dystopian-sbh/repair-kernel-toolchain-sonames.sh
+EOF
+  echo "✓ Repair hook created: $REPAIR_HOOK"
+else
+  echo "✓ Package-owned SONAME repair hook already installed"
+fi
+
 # Create the UKI generation script
 echo "Creating UKI generation script..."
-mkdir -p /usr/local/bin
+mkdir -p "$GENERATE_UKI_DIR"
 
-cat > /usr/local/bin/generate-uki.sh << 'EOF'
+cat > "$GENERATE_UKI_SCRIPT" << 'EOF'
 #!/usr/bin/env bash
 # CachyOS UKI generation script with NVIDIA 580
 
@@ -140,13 +165,130 @@ fi
 echo "✓ UKI ready for boot"
 EOF
 
-chmod +x /usr/local/bin/generate-uki.sh
+chmod +x "$GENERATE_UKI_SCRIPT"
 
-echo "✓ UKI generation script created: /usr/local/bin/generate-uki.sh"
+echo "✓ UKI generation script created: $GENERATE_UKI_SCRIPT"
+
+echo "Creating kernel toolchain SONAME repair script..."
+cat > "$REPAIR_UKI_SCRIPT" << 'EOF'
+#!/usr/bin/env bash
+# Repair stale SONAME links for kernel build tools after toolchain upgrades.
+# This keeps objtool and similar kernel helper binaries usable when a shared
+# library SONAME changes but the underlying ABI-compatible library is present.
+
+set -euo pipefail
+umask 077
+
+log() {
+  printf '[repair-soname] %s\n' "$*"
+}
+
+warn() {
+  printf '[repair-soname] %s\n' "$*" >&2
+}
+
+die() {
+  warn "$*"
+  exit 1
+}
+
+require_root() {
+  if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+    die "Run as root"
+  fi
+}
+
+discover_kernel_tools() {
+  find /usr/lib/modules -path '*/build/tools/*' -type f -perm -111 2>/dev/null | sort -u
+}
+
+missing_sonames_for() {
+  local binary="$1"
+  ldd "$binary" 2>/dev/null \
+    | awk '/=> not found$/ {print $1}' \
+    | sort -u
+}
+
+pick_compat_target() {
+  local missing="$1"
+  local stem candidates=()
+
+  stem="${missing%.so.*}.so."
+
+  shopt -s nullglob
+  candidates=(/usr/lib/"${stem}"*)
+  shopt -u nullglob
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    return 1
+  fi
+
+  mapfile -t candidates < <(printf '%s\n' "${candidates[@]}" | sort -V)
+  printf '%s\n' "${candidates[${#candidates[@]}-1]}"
+}
+
+repair_missing_soname() {
+  local missing="$1"
+  local compat="/usr/lib/$missing"
+  local target
+
+  if [[ -e "$compat" && ! -L "$compat" ]]; then
+    return 0
+  fi
+
+  if [[ -L "$compat" ]]; then
+    rm -f -- "$compat"
+  fi
+
+  target="$(pick_compat_target "$missing")" || return 1
+  ln -s -- "$(basename "$target")" "$compat"
+  log "Linked $compat -> $(basename "$target")"
+}
+
+verify_tools() {
+  local binary missing
+  local unresolved=0
+
+  while IFS= read -r binary; do
+    [[ -n "$binary" ]] || continue
+    while IFS= read -r missing; do
+      [[ -n "$missing" ]] || continue
+      unresolved=1
+      if repair_missing_soname "$missing"; then
+        continue
+      fi
+      warn "No compat target found for $missing (reported by $binary)"
+    done < <(missing_sonames_for "$binary")
+  done < <(discover_kernel_tools)
+
+  if [[ $unresolved -eq 0 ]]; then
+    log "No missing kernel tool SONAMEs detected"
+  fi
+}
+
+main() {
+  require_root
+
+  if ! command -v ldd >/dev/null 2>&1; then
+    die "ldd not found"
+  fi
+
+  verify_tools
+
+  if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig
+  fi
+}
+
+main "$@"
+EOF
+chmod +x "$REPAIR_UKI_SCRIPT"
+echo "✓ Repair script created: $REPAIR_UKI_SCRIPT"
 
 # Verify
 ls -lh /etc/pacman.d/hooks/99-ukify-cachyos.hook
-ls -lh /usr/local/bin/generate-uki.sh
+ls -lh "$GENERATE_UKI_SCRIPT"
+ls -lh "$REPAIR_UKI_SCRIPT"
 
 echo ""
 echo "✓ Setup complete"
