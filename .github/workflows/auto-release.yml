@@ -157,15 +157,31 @@ jobs:
       - name: Create and push new tag
         if: steps.next_tag.outputs.tag != ''
         id: tag_create
-        uses: DCx7C5/actions/tag-create-and-push@v1
+        shell: bash
         env:
-          GH_TOKEN: ${{ steps.auth_token.outputs.token }}
-        with:
-          sign: ${{ steps.gpg_ready.outputs.enabled }}
-          version: ${{ steps.next_tag.outputs.tag }}
-          commit-msg: "Release ${{ steps.next_tag.outputs.tag }}"
-          pass: ${{ steps.gpg_ready.outputs.enabled == 'true' && secrets.GPG_PASSPHRASE || '' }}
-          gpg-home: ${{ steps.gpg_ready.outputs.enabled == 'true' && steps.gpg_import.outputs.gpg_home || '' }}
+          TAG_NAME: ${{ steps.next_tag.outputs.tag }}
+          GPG_ENABLED: ${{ steps.gpg_ready.outputs.enabled }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_HOME: ${{ steps.gpg_import.outputs.gpg_home }}
+        run: |
+          set -euo pipefail
+          tag="${TAG_NAME}"
+
+          if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+            echo "::notice::Tag ${tag} already exists; reusing it."
+            echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${GPG_ENABLED}" == "true" ]]; then
+            export GNUPGHOME="${GPG_HOME}"
+            git tag -s "${tag}" -m "Release ${tag}" --force
+          else
+            git tag -a "${tag}" -m "Release ${tag}" --force
+          fi
+
+          git push origin "refs/tags/${tag}"
+          echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
         if: steps.next_tag.outputs.tag != ''
