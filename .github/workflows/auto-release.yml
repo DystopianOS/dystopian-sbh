@@ -9,9 +9,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 concurrency:
   group: "update-tag-and-release-${{ github.event_name }}-${{ github.ref }}"
   cancel-in-progress: true
@@ -59,20 +56,6 @@ jobs:
           echo "has_commits=true" >> "$GITHUB_OUTPUT"
           echo "range=${latest}..HEAD" >> "$GITHUB_OUTPUT"
 
-      - name: Calculate next tag
-        if: steps.release_window.outputs.has_commits == 'true'
-        id: semver
-        uses: PaulHatch/semantic-version@v5.4.0
-        with:
-          tag_prefix: "v"
-          search_commit_body: "true"
-          bump_each_commit: "false"
-          major_pattern: "BREAKING CHANGE|^[^\\s]+(\\(.+\\))?!:"
-          major_regexp_flags: ""
-          minor_pattern: "^feat(\\(.+\\))?:"
-          minor_regexp_flags: ""
-          version_format: "${major}.${minor}.${patch}"
-
       - name: Prepare tag and release notes
         id: next_tag
         shell: bash
@@ -84,17 +67,46 @@ jobs:
             exit 0
           fi
 
-          new_tag="${{ steps.semver.outputs.version_tag }}"
-          if [[ -z "$new_tag" ]]; then
-            new_tag="v${{ steps.semver.outputs.version }}"
+          latest="${{ steps.tag_latest.outputs.tag_name }}"
+          if [[ -z "$latest" || "$latest" == "null" ]]; then
+            latest="v0.0.0"
           fi
+
+          core="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$core"
 
           range="${{ steps.release_window.outputs.range }}"
           if [[ -n "$range" ]]; then
+            commit_text="$(git log --format='%s%n%b' "$range")"
             release_notes="$(git log --format='- %h %s (%an)' "$range" | cat)"
           else
+            commit_text="$(git log --format='%s%n%b')"
             release_notes="$(git log --format='- %h %s (%an)' | cat)"
           fi
+
+          bump="patch"
+          if grep -Eq 'BREAKING CHANGE|^[^ ]+!:' <<< "$commit_text"; then
+            bump="major"
+          elif grep -Eq '^feat(\(|:)' <<< "$commit_text"; then
+            bump="minor"
+          fi
+
+          case "$bump" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          new_tag="v${major}.${minor}.${patch}"
 
           if [[ -z "$release_notes" ]]; then
             release_notes="- No user-facing changes recorded."
@@ -231,8 +243,23 @@ jobs:
         with:
           gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
 
+      - name: Validate Telegram token format
+        id: tg_ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          token='${{ secrets.TELEGRAM_BOT_TOKEN }}'
+          chat='${{ secrets.TELEGRAM_CHANNEL_ID }}'
+          if [[ -n "$token" && -n "$chat" && "$token" =~ ^[0-9]+:[A-Za-z0-9_-]{20,}$ ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Telegram token/chat-id missing or malformed; skipping Telegram notification."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Notify on success
-        if: success() && steps.next_tag.outputs.tag != '' && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHANNEL_ID != '' && contains(secrets.TELEGRAM_BOT_TOKEN, ':')
+        if: success() && steps.next_tag.outputs.tag != '' && steps.tg_ready.outputs.enabled == 'true'
+        continue-on-error: true
         uses: DCx7C5/actions/tg-notify-release@v1
         with:
           tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
