@@ -33,8 +33,8 @@ validpgpkeys=(
 package() {
   cd "$srcdir/$pkgname"
 
-  # Install main orchestrator binary to /sbin/
-  install -Dm755 bin/dystopian-sbh.sh "$pkgdir/sbin/dystopian-sbh"
+  # Install main orchestrator binary to /usr/bin/
+  install -Dm755 bin/dystopian-sbh.sh "$pkgdir/usr/bin/dystopian-sbh"
 
   # Install helper scripts
   install -Dm755 bin/build-from-scratch.sh "$pkgdir/usr/bin/dystopian-sbh-build"
