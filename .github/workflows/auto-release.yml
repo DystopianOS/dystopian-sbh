@@ -17,23 +17,11 @@ jobs:
   update-tag-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App Token
-        id: app_token
-        if: ${{ secrets.DYSTOPIANBOT_APP_ID != '' && secrets.DYSTOPIANBOT_KEY != '' }}
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
-          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
-
       - name: Resolve auth token
         id: auth_token
         shell: bash
         run: |
-          if [ -n "${{ steps.app_token.outputs.token }}" ]; then
-            echo "token=${{ steps.app_token.outputs.token }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v5
