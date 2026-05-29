@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: "update-tag-and-release-${{ github.event_name }}-${{ github.ref }}"
   cancel-in-progress: true
@@ -65,9 +68,9 @@ jobs:
           search_commit_body: "true"
           bump_each_commit: "false"
           major_pattern: "BREAKING CHANGE|^[^\\s]+(\\(.+\\))?!:"
-          major_regexp: "true"
+          major_regexp_flags: ""
           minor_pattern: "^feat(\\(.+\\))?:"
-          minor_regexp: "true"
+          minor_regexp_flags: ""
           version_format: "${major}.${minor}.${patch}"
 
       - name: Prepare tag and release notes
@@ -194,7 +197,15 @@ jobs:
             git tag -a "${tag}" -m "Release ${tag}" --force
           fi
 
-          git push origin "refs/tags/${tag}"
+          if git push origin "refs/tags/${tag}"; then
+            :
+          elif git ls-remote --tags --exit-code origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "::notice::Remote tag ${tag} exists after push attempt; treating as success."
+          else
+            echo "::error::Failed to push tag ${tag}" >&2
+            exit 1
+          fi
+
           echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
@@ -220,7 +231,7 @@ jobs:
           gpg-home: ${{ steps.gpg_import.outputs.gpg_home }}
 
       - name: Notify on success
-        if: success() && steps.next_tag.outputs.tag != ''
+        if: success() && steps.next_tag.outputs.tag != '' && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHANNEL_ID != ''
         uses: DCx7C5/actions/tg-notify-release@v1
         with:
           tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
