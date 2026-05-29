@@ -19,9 +19,10 @@ jobs:
     steps:
       - name: Resolve auth token
         id: auth_token
-        shell: bash
-        run: |
-          echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
 
       - name: Checkout repository
         uses: actions/checkout@v5
