@@ -10,7 +10,7 @@ arch=('x86_64')
 license=('MIT')
 url="https://github.com/DystopianOS/${pkgname}"
 groups=('dystopian')
-source=("git+https://github.com/DystopianOS/dystopian-sbh#branch=main")
+source=("git+https://github.com/DystopianOS/dystopian-sbh#commit=b1d8abcdbe793975ef63e5f39751bcab77942c32")
 makedepends=('git')
 depends=('bash' 'efibootmgr' 'grub' 'systemd')
 optdepends=(

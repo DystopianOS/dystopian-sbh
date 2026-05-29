@@ -17,7 +17,8 @@ fi
 
 # Create venv with uv
 echo "Creating venv with uv..."
-cd /home/daen/Projects/sbh/python-dev
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 uv venv --python 3.14 2>/dev/null || uv venv 2>/dev/null
 source venv/bin/activate
 

@@ -84,7 +84,7 @@ All modules are in the `cachyos_sbh/` package:
 
 ### Setup
 ```bash
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 source .venv/bin/activate
 ```
 
@@ -134,7 +134,7 @@ EOF
 ### Build & Install
 ```bash
 # Build with makepkg
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 makepkg -si
 
 # Or build wheel manually

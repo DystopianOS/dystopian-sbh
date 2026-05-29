@@ -5,7 +5,7 @@ Python 3.14-ready async utilities for Secure Boot + NVIDIA + TPM2 orchestration.
 ## Setup
 
 ```bash
-cd python-dev
+cd /path/to/cachyos-sbh/python-dev
 source .venv/bin/activate
 ```
 
@@ -94,4 +94,3 @@ Expected: **6 passed** ✓
 - Add CI/CD linting (GitHub Actions)
 - Add performance benchmarks
 - Add integration tests with real TPM2/LUKS
-

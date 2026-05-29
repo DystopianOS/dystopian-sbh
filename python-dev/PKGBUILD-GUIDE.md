@@ -26,7 +26,7 @@ sudo pacman -S python-aiofiles
 ### Method 1: Using makepkg (Recommended)
 
 ```bash
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 
 # Build the package
 makepkg -si
@@ -38,7 +38,7 @@ makepkg -Cci
 ### Method 2: Manual Build
 
 ```bash
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 
 # Install dependencies
 python -m pip install --user setuptools build
@@ -159,7 +159,7 @@ if __name__ == "__main__":
 ### Set Up Dev Environment
 
 ```bash
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 source .venv/bin/activate
 
 # Reinstall in editable mode
@@ -195,21 +195,21 @@ Install the package:
 
 ```bash
 # Via makepkg
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 makepkg -si
 
 # Or via pip (editable)
-pip install -e ~/Projects/sbh/python-dev
+pip install -e /path/to/cachyos-sbh/python-dev
 ```
 
 ### Tests Fail to Import
 
 ```bash
 # Add to PYTHONPATH
-export PYTHONPATH="/home/daen/Projects/sbh/python-dev:$PYTHONPATH"
+export PYTHONPATH="/path/to/cachyos-sbh/python-dev:$PYTHONPATH"
 
 # Or run from project directory
-cd ~/Projects/sbh/python-dev
+cd /path/to/cachyos-sbh/python-dev
 pytest tests/ -v
 ```
 

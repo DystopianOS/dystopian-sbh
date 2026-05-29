@@ -14,8 +14,7 @@ setup(
     author="CachyOS SBH Project",
     url="https://github.com/cachyos/cachyos-sbh",
     license="MIT",
-    packages=find_packages(where="src", include=["cachyos_sbh*"]),
-    package_dir={"": "src"},
+    packages=find_packages(include=["cachyos_sbh*"]),
     python_requires=">=3.14",
     install_requires=[
         "aiofiles>=25.1.0",

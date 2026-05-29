@@ -105,7 +105,7 @@ Post-Install Checks:
 PKGBUILD FUNCTIONS
 ═══════════════════════════════════════════════════════════════════════════
 prepare()
-  └─ Copy source files from /home/daen/Projects/sbh/python-dev/
+  └─ Copy source files from the pinned git checkout under $srcdir/
      to ${srcdir}
 
 build()
@@ -146,7 +146,7 @@ BUILD INSTRUCTIONS
 1. Ensure PKGBUILD, setup.py, cachyos_sbh/ are in same directory
 
 2. Run makepkg:
-   $ cd ~/Projects/sbh/python-dev
+   $ cd /path/to/cachyos-sbh/python-dev
    $ makepkg -si        # Build and install
    $ makepkg -Cci       # Build with all checks
 
